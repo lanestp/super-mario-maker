@@ -237,7 +237,7 @@ func TestServerBoots(t *testing.T) {
 	eventCourseMetadata := bytes.Repeat([]byte{0x5A}, 4321)
 
 	s3 := s3test.Start(t)
-	s3.Put(t, "900000.bin", eventCourseMetadata)
+	s3.Put(t, "courses/900000.bin", eventCourseMetadata)
 
 	started := startServer(t, s3)
 	started.waitUntilReady(t)
@@ -274,8 +274,12 @@ func TestServerRefusesToBootWithoutEventCourseMetadata(t *testing.T) {
 		t.Skip("builds and runs the server")
 	}
 
-	// * The bucket exists but does not have 900000.bin in it
-	started := startServer(t, s3test.Start(t))
+	// * The file is in the bucket, but not under the key prefix the
+	// * game is sent to when it downloads the file
+	s3 := s3test.Start(t)
+	s3.Put(t, "900000.bin", []byte("event course metadata"))
+
+	started := startServer(t, s3)
 
 	select {
 	case err := <-started.exited:
@@ -322,7 +326,7 @@ func TestConsoleCanLogInAndFindTheGameServer(t *testing.T) {
 	}
 
 	s3 := s3test.Start(t)
-	s3.Put(t, "900000.bin", []byte("event course metadata"))
+	s3.Put(t, "courses/900000.bin", []byte("event course metadata"))
 
 	var account store.Account
 

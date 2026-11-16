@@ -13,6 +13,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"os"
@@ -25,22 +28,24 @@ import (
 	"github.com/spf13/afero"
 )
 
-// * The event course metadata file the game server refuses to start without
-const eventCourseMetadataKey = "900000.bin"
+// * The event course metadata file the game server refuses to start
+// * without. It is kept under the same key prefix as course files
+const eventCourseMetadataName = "900000.bin"
 
 func main() {
 	address := flag.String("addr", "127.0.0.1:9000", "address to listen on. Only addresses on this machine are allowed")
 	directory := flag.String("dir", "local-data/s3", "directory to keep files in")
 	bucket := flag.String("bucket", "smm", "bucket to make sure exists")
+	keyBase := flag.String("key-base", "courses", "key prefix the game server keeps files under (its PN_SMM_CONFIG_S3_KEY_BASE)")
 	flag.Parse()
 
-	if err := run(*address, *directory, *bucket); err != nil {
+	if err := run(*address, *directory, *bucket, *keyBase+"/"+eventCourseMetadataName); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(address, directory, bucket string) error {
+func run(address, directory, bucket, eventCourseMetadataKey string) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
 		return err
@@ -66,7 +71,7 @@ func run(address, directory, bucket string) error {
 	}
 
 	server := &http.Server{
-		Handler:           gofakes3.New(backend).Server(),
+		Handler:           logRequests(nameUploadedFiles(gofakes3.New(backend).Server())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -75,7 +80,7 @@ func run(address, directory, bucket string) error {
 
 	// * The bucket and file are made through the server itself, so
 	// * that they are stored the way it expects
-	if err := prepare(listener.Addr().String(), bucket); err != nil {
+	if err := prepare(listener.Addr().String(), bucket, eventCourseMetadataKey); err != nil {
 		return err
 	}
 
@@ -84,7 +89,7 @@ func run(address, directory, bucket string) error {
 	return <-serveError
 }
 
-func prepare(address, bucket string) error {
+func prepare(address, bucket, eventCourseMetadataKey string) error {
 	client, err := minio.New(address, &minio.Options{
 		Creds:  credentials.NewStaticV4("local", "local-secret", ""),
 		Secure: false,
@@ -121,4 +126,131 @@ func prepare(address, bucket string) error {
 	}
 
 	return nil
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	body   bytes.Buffer
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *statusRecorder) Write(data []byte) (int, error) {
+	if r.body.Len() < maxLoggedBytes {
+		r.body.Write(data)
+	}
+
+	return r.ResponseWriter.Write(data)
+}
+
+// * How much of a refused request and its answer is printed
+const maxLoggedBytes = 4096
+
+// * Prints each request, so that it can be seen whether a console's
+// * uploads and downloads arrive. Query strings are left out, as
+// * presigned URLs carry their signature there. A refused request is
+// * printed with its headers, the start of what was sent and the
+// * answer, as a console gives no detail about why an upload failed
+func logRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+		var sent bytes.Buffer
+		r.Body = io.NopCloser(io.TeeReader(r.Body, &limitedWriter{buffer: &sent, remaining: maxLoggedBytes}))
+
+		next.ServeHTTP(recorder, r)
+
+		fmt.Printf("[S3] %s %s %s -> %d (%d bytes sent by client)\n", time.Now().Format("15:04:05"), r.Method, r.URL.Path, recorder.status, r.ContentLength)
+
+		if recorder.status >= http.StatusBadRequest && r.Method != http.MethodHead {
+			fmt.Printf("[S3] refused request headers: %q\n[S3] refused request start: %q\n[S3] answer: %q\n", r.Header, sent.String(), recorder.body.String())
+		}
+	})
+}
+
+type limitedWriter struct {
+	buffer    *bytes.Buffer
+	remaining int
+}
+
+func (w *limitedWriter) Write(data []byte) (int, error) {
+	kept := min(len(data), w.remaining)
+	w.buffer.Write(data[:kept])
+	w.remaining -= kept
+
+	return len(data), nil
+}
+
+// * The largest form upload that is rewritten. Course files are far smaller
+const maxFormUploadBytes = 64 << 20
+
+// * A console sends the "file" part of an upload form without a file
+// * name. S3 accepts that, but the stand-in only sees a part as a file
+// * when it has a name, and refuses the upload. This gives the part a
+// * name before the stand-in reads the form
+func nameUploadedFiles(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPost || err != nil || mediaType != "multipart/form-data" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		body, contentType, err := renameFilePart(http.MaxBytesReader(w, r.Body, maxFormUploadBytes), params["boundary"])
+		if err != nil {
+			http.Error(w, "could not read the upload form: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		r.Body = io.NopCloser(body)
+		r.ContentLength = int64(body.Len())
+		r.Header.Set("Content-Type", contentType)
+		r.Header.Set("Content-Length", fmt.Sprint(body.Len()))
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// * Copies a form, giving the "file" part a file name if it has none
+func renameFilePart(form io.Reader, boundary string) (*bytes.Buffer, string, error) {
+	reader := multipart.NewReader(form, boundary)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	for {
+		part, err := reader.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			return nil, "", err
+		}
+
+		var copied io.Writer
+
+		if part.FormName() == "file" && part.FileName() == "" {
+			copied, err = writer.CreateFormFile("file", "upload")
+		} else {
+			copied, err = writer.CreatePart(part.Header)
+		}
+
+		if err != nil {
+			return nil, "", err
+		}
+
+		if _, err := io.Copy(copied, part); err != nil {
+			return nil, "", err
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, "", err
+	}
+
+	return body, writer.FormDataContentType(), nil
 }

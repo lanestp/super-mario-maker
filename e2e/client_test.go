@@ -58,7 +58,7 @@ func TestConsoleCanUploadAndDownloadACourse(t *testing.T) {
 	}
 
 	s3 := s3test.Start(t)
-	s3.Put(t, "900000.bin", []byte("event course metadata"))
+	s3.Put(t, "courses/900000.bin", []byte("event course metadata"))
 
 	var account store.Account
 
@@ -153,7 +153,7 @@ func TestConsoleCanUploadAndDownloadACourse(t *testing.T) {
 			t.Fatal(object.Err)
 		}
 
-		if object.Key == "900000.bin" {
+		if object.Key == "courses/900000.bin" {
 			continue
 		}
 

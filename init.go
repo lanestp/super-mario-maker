@@ -11,6 +11,7 @@ import (
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/accountapi"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
+	"github.com/PretendoNetwork/super-mario-maker/store"
 	"github.com/PretendoNetwork/super-mario-maker/store/open"
 	"github.com/joho/godotenv"
 
@@ -244,11 +245,13 @@ func ensureEventCourseMetadataFileExists() {
 	// * database before booting. It has the reserved
 	// * DataID 900000
 	bucket := os.Getenv("PN_SMM_CONFIG_S3_BUCKET")
-	key := "900000.bin"
+
+	// * The same key the game is sent to when it downloads the file
+	key := fmt.Sprintf("%s/%d.bin", os.Getenv("PN_SMM_CONFIG_S3_KEY_BASE"), store.EventCourseMetadataDataID)
 
 	objectSizeS3, err := globals.S3ObjectSize(bucket, key)
 	if err != nil {
-		globals.Logger.Errorf("Failed to stat event course metadata file. Ensure your S3 credentials are correct and the 900000.bin file is uploaded to your bucket. S3 error: %s", err.Error())
+		globals.Logger.Errorf("Failed to stat event course metadata file. Ensure your S3 credentials are correct and the file is uploaded to your bucket as %s. S3 error: %s", key, err.Error())
 		os.Exit(1)
 	}
 

@@ -19,7 +19,7 @@ go build -o build/super-mario-maker .
 go build -o build/smm-account ./cmd/smm-account
 go build -o build/smm-local-s3 ./cmd/smm-local-s3
 
-build/smm-local-s3 -addr 127.0.0.1:9000 -dir local-data/s3 -bucket smm &
+build/smm-local-s3 -addr 127.0.0.1:9000 -dir local-data/s3 -bucket smm -key-base courses &
 s3_pid=$!
 trap 'kill "$s3_pid" 2>/dev/null || true' EXIT INT TERM
 

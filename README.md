@@ -66,6 +66,32 @@ With `PN_SMM_ACCOUNT_HTTP_PORT` set, the server also answers the account request
 
 The password is asked for, or read from the `SMM_ACCOUNT_PASSWORD` environment variable. Passwords are stored as a salted bcrypt hash of the hash a console sends, never as the password itself. Each account's NEX password is stored as it is, since the server needs it to talk to the console
 
+## Trying it on one machine
+`scripts/run-local.sh` builds and runs everything on this machine: the server with SQLite and its own accounts, the account API on port 8383, and a stand-in S3 server which keeps files in `local-data`. The stand-in has no access control and only listens on this machine. None of this is suitable for a server other people can reach
+
+To point Cemu at it, make an account, then write a Cemu account file for it and tell Cemu where the account API is
+
+```bash
+$ export PN_SMM_DATABASE=sqlite PN_SMM_SQLITE_PATH=local-data/smm.db
+$ build/smm-account create <username>
+$ build/smm-account cemu <username> <Cemu folder>/mlc01/usr/save/system/act/80000001/account.dat
+```
+
+and put this in `network_services.xml` in Cemu's folder, then choose the custom network service for the account in Cemu's settings
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<content>
+	<networkname>Local SMM</networkname>
+	<disablesslverification>1</disablesslverification>
+	<urls>
+		<act>http://127.0.0.1:8383</act>
+	</urls>
+</content>
+```
+
+Cemu also wants `otp.bin`, `seeprom.bin` and the certificate files of a Wii U before it will go online, and a copy of the game. This has not been tried with Cemu and the game yet, only with the client in `e2e`
+
 ## Testing
 
 ```bash

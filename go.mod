@@ -12,6 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/minio/minio-go/v7 v7.0.84
+	github.com/spf13/afero v1.2.1
 	golang.org/x/crypto v0.59.0
 	golang.org/x/term v0.48.0
 	google.golang.org/grpc v1.70.0

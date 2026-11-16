@@ -30,3 +30,4 @@ log
 # e2e test client
 e2e/client/.venv
 __pycache__
+local-data

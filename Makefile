@@ -48,13 +48,12 @@ SERVER_BUILD := super-mario-maker
 endif
 
 # * Final build string
-DATE_TIME    := $(shell date --iso=seconds)
+DATE_TIME    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 BUILD_STRING := $(SERVER_BUILD), $(DATE_TIME)
 
 default:
 ifeq ($(wildcard .env),)
 	$(warning "$(YELLOW).env file not found, environment variables may not be populated correctly$(RESET)")
 endif
-	go get -u
-	go mod tidy
+	go mod download
 	go build -ldflags "-X 'main.serverBuildString=$(BUILD_STRING)'" -o ./build/super-mario-maker

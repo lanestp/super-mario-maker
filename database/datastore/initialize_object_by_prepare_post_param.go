@@ -20,7 +20,7 @@ func InitializeObjectByPreparePostParam(ownerPID types.PID, param datastore_type
 	}
 
 	extraDataArray := make([]string, 0, len(param.ExtraData))
-	for i := range param.Tags {
+	for i := range param.ExtraData {
 		extraDataArray = append(extraDataArray, string(param.ExtraData[i]))
 	}
 

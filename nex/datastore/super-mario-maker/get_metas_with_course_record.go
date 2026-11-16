@@ -6,8 +6,6 @@ import (
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_super_mario_maker_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
-	datastore_db "github.com/PretendoNetwork/super-mario-maker/database/datastore"
-	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -34,7 +32,7 @@ func GetMetasWithCourseRecord(err error, packet nex.PacketInterface, callID uint
 		// * to be used for all objects being requested here. So
 		// * just assume metaParam is ONLY used for the resultOption
 		// * field?
-		objectInfo, nexError := datastore_db.GetObjectInfoByDataID(params[i].DataID)
+		objectInfo, nexError := globals.Store.GetObjectInfoByDataID(params[i].DataID)
 		if nexError != nil {
 			objectInfo = datastore_types.NewDataStoreMetaInfo()
 		} else {
@@ -66,7 +64,7 @@ func GetMetasWithCourseRecord(err error, packet nex.PacketInterface, callID uint
 		}
 
 		// * Ignore errors, real server sends empty struct if can't be found
-		courseRecord, nexError := datastore_smm_db.GetCourseRecordByDataIDAndSlot(params[i].DataID, params[i].Slot)
+		courseRecord, nexError := globals.Store.GetCourseRecordByDataIDAndSlot(params[i].DataID, params[i].Slot)
 		if nexError != nil || objectInfo.DataID == 0 { // * DataID == 0 means could not be found or accessed
 			courseRecord = datastore_super_mario_maker_types.NewDataStoreGetCourseRecordResult()
 		}

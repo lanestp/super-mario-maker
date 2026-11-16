@@ -7,7 +7,6 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
-	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -34,7 +33,7 @@ func SuggestedCourseSearchObject(err error, packet nex.PacketInterface, callID u
 	}
 
 	// TODO - Use extraData for filtering
-	pRankingResults, nexError := datastore_smm_db.GetRandomCoursesWithLimit(int(param.ResultRange.Length))
+	pRankingResults, nexError := globals.Store.GetRandomCoursesWithLimit(int(param.ResultRange.Length))
 	if nexError != nil {
 		return nil, nexError
 	}

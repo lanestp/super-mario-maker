@@ -5,8 +5,6 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_super_mario_maker_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
-	datastore_db "github.com/PretendoNetwork/super-mario-maker/database/datastore"
-	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -27,12 +25,12 @@ func AddToBufferQueues(err error, packet nex.PacketInterface, callID uint32, par
 	// * ignore all other data in the larger list
 	iterations := min(len(params), len(buffers))
 
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		param := params[i]
 		buffer := buffers[i]
 
 		if param.Slot == 0 {
-			objectInfo, nexError := datastore_db.GetObjectInfoByDataID(param.DataID)
+			objectInfo, nexError := globals.Store.GetObjectInfoByDataID(param.DataID)
 			if nexError != nil {
 				return nil, nexError
 			}
@@ -49,7 +47,7 @@ func AddToBufferQueues(err error, packet nex.PacketInterface, callID uint32, par
 			}
 		}
 
-		nexError := datastore_smm_db.InsertOrUpdateBufferQueueData(param.DataID, param.Slot, buffer)
+		nexError := globals.Store.InsertOrUpdateBufferQueueData(param.DataID, param.Slot, buffer)
 		if nexError != nil {
 			return nil, nexError
 		}

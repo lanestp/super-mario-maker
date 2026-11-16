@@ -8,20 +8,19 @@ import (
 
 	pb "github.com/PretendoNetwork/grpc/go/smm/v1"
 	"github.com/PretendoNetwork/nex-go/v2/types"
-	datastore_db "github.com/PretendoNetwork/super-mario-maker/database/datastore"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
 func (s *gRPCSMMServer) DeleteCourse(ctx context.Context, in *pb.DeleteCourseRequest) (*pb.DeleteCourseResponse, error) {
 	dataID := types.NewUInt64(in.DataId)
-	err := datastore_db.IsObjectAvailable(dataID)
+	err := globals.Store.IsObjectAvailable(dataID)
 	if err != nil {
 		return &pb.DeleteCourseResponse{
 			Success: false,
 		}, status.Errorf(codes.NotFound, "Course not found")
 	}
 
-	metaInfo, err := datastore_db.GetObjectInfoByDataID(dataID)
+	metaInfo, err := globals.Store.GetObjectInfoByDataID(dataID)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
 		return &pb.DeleteCourseResponse{
@@ -29,7 +28,7 @@ func (s *gRPCSMMServer) DeleteCourse(ctx context.Context, in *pb.DeleteCourseReq
 		}, status.Errorf(codes.Internal, "internal server error")
 	}
 
-	err = datastore_db.DeleteObjectByDataID(dataID)
+	err = globals.Store.DeleteObjectByDataID(dataID)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
 		return &pb.DeleteCourseResponse{

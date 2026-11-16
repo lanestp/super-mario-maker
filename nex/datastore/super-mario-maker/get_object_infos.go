@@ -9,7 +9,6 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_super_mario_maker_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
-	datastore_db "github.com/PretendoNetwork/super-mario-maker/database/datastore"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -22,7 +21,7 @@ func GetObjectInfos(err error, packet nex.PacketInterface, callID uint32, dataID
 	pInfos := types.NewList[datastore_super_mario_maker_types.DataStoreFileServerObjectInfo]()
 
 	for i := range dataIDs {
-		objectInfo, nexError := datastore_db.GetObjectInfoByDataID(dataIDs[i])
+		objectInfo, nexError := globals.Store.GetObjectInfoByDataID(dataIDs[i])
 		if nexError != nil {
 			return nil, nexError
 		}

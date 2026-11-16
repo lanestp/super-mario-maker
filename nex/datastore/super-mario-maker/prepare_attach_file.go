@@ -10,8 +10,6 @@ import (
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_super_mario_maker_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
-	datastore_db "github.com/PretendoNetwork/super-mario-maker/database/datastore"
-	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -27,7 +25,7 @@ func PrepareAttachFile(err error, packet nex.PacketInterface, callID uint32, par
 	// * image after uploading the course.
 	// * param.ReferDataID is the courses object DataID
 
-	dataID, nexError := datastore_smm_db.InitializeObjectByAttachFileParam(packet.Sender().PID(), param)
+	dataID, nexError := globals.Store.InitializeObjectByAttachFileParam(packet.Sender().PID(), param)
 	if nexError != nil {
 		globals.Logger.Errorf("Error code %d on object init", nexError.ResultCode)
 		return nil, nexError
@@ -37,7 +35,7 @@ func PrepareAttachFile(err error, packet nex.PacketInterface, callID uint32, par
 	// * This never seems to have any values during normal gameplay,
 	// * but just in case
 	for i := range param.PostParam.RatingInitParams {
-		nexError = datastore_db.InitializeObjectRatingWithSlot(uint64(dataID), param.PostParam.RatingInitParams[i])
+		nexError = globals.Store.InitializeObjectRatingWithSlot(uint64(dataID), param.PostParam.RatingInitParams[i])
 		if nexError != nil {
 			globals.Logger.Errorf("Error code %d on rating init", nexError.ResultCode)
 			return nil, nexError

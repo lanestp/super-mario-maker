@@ -5,7 +5,6 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_super_mario_maker_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
-	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -17,7 +16,7 @@ func RateCustomRanking(err error, packet nex.PacketInterface, callID uint32, par
 
 	// TODO - Check the period. The real server does check this, just unsure what it means or what the check is
 	for i := range params {
-		datastore_smm_db.InsertOrUpdateCustomRanking(params[i].DataID, params[i].ApplicationID, params[i].Score)
+		globals.Store.InsertOrUpdateCustomRanking(params[i].DataID, params[i].ApplicationID, params[i].Score)
 	}
 
 	rmcResponse := nex.NewRMCSuccess(globals.SecureEndpoint, nil)

@@ -5,6 +5,7 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2"
 	datastorecommon "github.com/PretendoNetwork/nex-protocols-common-go/v2/datastore"
 	"github.com/PretendoNetwork/plogger-go"
+	"github.com/PretendoNetwork/super-mario-maker/store"
 	"github.com/minio/minio-go/v7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -16,6 +17,7 @@ var AuthenticationServer *nex.PRUDPServer
 var AuthenticationEndpoint *nex.PRUDPEndPoint
 var SecureServer *nex.PRUDPServer
 var SecureEndpoint *nex.PRUDPEndPoint
+var Store store.Store
 var DatastoreCommon *datastorecommon.CommonProtocol
 var GRPCAccountClientConnection *grpc.ClientConn
 var GRPCAccountClient pb.AccountClient

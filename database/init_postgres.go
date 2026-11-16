@@ -9,6 +9,11 @@ import (
 )
 
 func initPostgres() {
+	CreateTables()
+}
+
+// CreateTables creates the datastore schema and all of its tables if they do not exist
+func CreateTables() {
 	_, err := Postgres.Exec(`CREATE SCHEMA IF NOT EXISTS datastore`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
@@ -147,29 +152,14 @@ func initPostgres() {
 	}
 
 	globals.Logger.Success("Postgres tables created")
-
-	ensureEventCourseMetaDataFileExists()
 }
 
-func ensureEventCourseMetaDataFileExists() {
-	// * The event course metadata file is REQUIRED for
-	// * Super Mario Maker to open Course World. This
-	// * ensures that it exists both in S3 and in the
-	// * database before booting. It has the reserved
-	// * DataID 900000
-	bucket := os.Getenv("PN_SMM_CONFIG_S3_BUCKET")
-	key := "900000.bin"
-
-	objectSizeS3, err := globals.S3ObjectSize(bucket, key)
-	if err != nil {
-		globals.Logger.Errorf("Failed to stat event course metadata file. Ensure your S3 credentials are correct and the 900000.bin file is uploaded to your bucket. S3 error: %s", err.Error())
-		os.Exit(0)
-	}
-
-	globals.Logger.Success("Event course metadata file found. Verifying database")
-
+// EnsureEventCourseMetadata makes sure the event course metadata object
+// exists in the database with the given size, which is the size of its
+// file in storage. It has the reserved DataID 900000
+func EnsureEventCourseMetadata(objectSizeS3 uint64) {
 	var exists bool
-	err = Postgres.QueryRow(`SELECT EXISTS(SELECT 1 FROM datastore.objects WHERE data_id=900000) AS "exists"`).Scan(&exists)
+	err := Postgres.QueryRow(`SELECT EXISTS(SELECT 1 FROM datastore.objects WHERE data_id=900000) AS "exists"`).Scan(&exists)
 	if err != nil {
 		globals.Logger.Errorf("Error querying for event course metadata object in Postgres: %s", err.Error())
 		os.Exit(0)

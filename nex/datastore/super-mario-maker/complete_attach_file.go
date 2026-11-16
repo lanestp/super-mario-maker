@@ -9,7 +9,6 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
-	datastore_db "github.com/PretendoNetwork/super-mario-maker/database/datastore"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -34,7 +33,7 @@ func CompleteAttachFile(err error, packet nex.PacketInterface, callID uint32, pa
 		return nil, nex.NewError(nex.ResultCodes.DataStore.NotFound, "Object not found")
 	}
 
-	objectSizeDB, nexError := datastore_db.GetObjectSizeByDataID(param.DataID)
+	objectSizeDB, nexError := globals.Store.GetObjectSizeByDataID(param.DataID)
 	if nexError != nil {
 		return nil, nexError
 	}
@@ -44,7 +43,7 @@ func CompleteAttachFile(err error, packet nex.PacketInterface, callID uint32, pa
 		return nil, nex.NewError(nex.ResultCodes.DataStore.Unknown, "")
 	}
 
-	nexError = datastore_db.UpdateObjectUploadCompletedByDataID(param.DataID, true)
+	nexError = globals.Store.UpdateObjectUploadCompletedByDataID(param.DataID, true)
 	if nexError != nil {
 		return nil, nexError
 	}

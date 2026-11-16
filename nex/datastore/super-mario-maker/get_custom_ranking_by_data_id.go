@@ -6,7 +6,6 @@ import (
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_super_mario_maker_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
-	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -16,7 +15,7 @@ func GetCustomRankingByDataID(err error, packet nex.PacketInterface, callID uint
 		return nil, nex.NewError(nex.ResultCodes.DataStore.Unknown, err.Error())
 	}
 
-	pRankingResult := datastore_smm_db.GetCustomRankingsByDataIDs(param.ApplicationID, param.DataIDList)
+	pRankingResult := globals.Store.GetCustomRankingsByDataIDs(param.ApplicationID, param.DataIDList)
 	pResults := make(types.List[types.QResult], 0, len(param.DataIDList))
 
 	for i := range pRankingResult {
@@ -46,7 +45,7 @@ func GetCustomRankingByDataID(err error, packet nex.PacketInterface, callID uint
 		}
 
 		// * Since all errors are thrown away in
-		// * datastore_smm_db.GetCustomRankingsByDataIDs
+		// * globals.Store.GetCustomRankingsByDataIDs
 		// * assume all objects returned were a success
 		pResults = append(pResults, types.NewQResultSuccess(nex.ResultCodes.Core.Unknown))
 	}

@@ -1,0 +1,64 @@
+// Package store defines the storage the server needs, independent of the
+// database behind it. Every backend must behave the same way: the tests in
+// store/storetest are run against each of them
+package store
+
+import (
+	"github.com/PretendoNetwork/nex-go/v2"
+	"github.com/PretendoNetwork/nex-go/v2/types"
+	datastore_smm_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
+	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
+)
+
+// MaxRandomCourses is the most courses a single random course search will return.
+// The largest request a real client makes is 100 (Course World on the Wii U)
+const MaxRandomCourses = 100
+
+// EventCourseMetadataDataID is the reserved DataID of the event course metadata file,
+// which Super Mario Maker requires to open Course World
+const EventCourseMetadataDataID = 900000
+
+// FirstDataID is the DataID given to the first object created. Official
+// event courses use DataIDs up to 930050, so objects must start after that
+const FirstDataID = 940000
+
+// Store is the storage used by the DataStore protocol
+type Store interface {
+	// * Objects
+	InitializeObjectByPreparePostParam(ownerPID types.PID, param datastore_types.DataStorePreparePostParam) (uint64, *nex.Error)
+	InitializeObjectByAttachFileParam(ownerPID types.PID, param datastore_smm_types.DataStoreAttachFileParam) (types.UInt64, *nex.Error)
+	IsObjectAvailable(dataID types.UInt64) *nex.Error
+	IsObjectAvailableWithPassword(dataID, password types.UInt64) *nex.Error
+	GetObjectInfoByDataID(dataID types.UInt64) (datastore_types.DataStoreMetaInfo, *nex.Error)
+	GetObjectInfoByDataIDWithPassword(dataID, password types.UInt64) (datastore_types.DataStoreMetaInfo, *nex.Error)
+	GetObjectInfoByPersistenceTargetWithPassword(persistenceTarget datastore_types.DataStorePersistenceTarget, password types.UInt64) (datastore_types.DataStoreMetaInfo, *nex.Error)
+	GetObjectOwnerByDataID(dataID types.UInt64) (uint32, *nex.Error)
+	GetObjectSizeByDataID(dataID types.UInt64) (uint32, *nex.Error)
+	UpdateObjectPeriodByDataIDWithPassword(dataID types.UInt64, period types.UInt16, password types.UInt64) *nex.Error
+	UpdateObjectMetaBinaryByDataIDWithPassword(dataID types.UInt64, metaBinary types.QBuffer, password types.UInt64) *nex.Error
+	UpdateObjectDataTypeByDataIDWithPassword(dataID types.UInt64, dataType types.UInt16, password types.UInt64) *nex.Error
+	UpdateObjectUploadCompletedByDataID(dataID types.UInt64, uploadCompleted bool) *nex.Error
+	DeleteObjectByDataID(dataID types.UInt64) *nex.Error
+
+	// * Ratings
+	InitializeObjectRatingWithSlot(dataID uint64, param datastore_types.DataStoreRatingInitParamWithSlot) *nex.Error
+	GetObjectRatingsWithSlotByDataID(dataID types.UInt64) ([]datastore_types.DataStoreRatingInfoWithSlot, *nex.Error)
+	GetObjectRatingsWithSlotByDataIDWithPassword(dataID, password types.UInt64) ([]datastore_types.DataStoreRatingInfoWithSlot, *nex.Error)
+	RateObjectWithPassword(dataID types.UInt64, slot types.UInt8, ratingValue types.Int32, accessPassword types.UInt64) (datastore_types.DataStoreRatingInfo, *nex.Error)
+
+	// * Super Mario Maker
+	GetUserCourseObjectIDs(ownerPID types.PID) (types.List[types.UInt64], *nex.Error)
+	GetRandomCoursesWithLimit(limit int) (types.List[datastore_smm_types.DataStoreCustomRankingResult], *nex.Error)
+	GetCustomRankingsByDataIDs(applicationID types.UInt32, dataIDs types.List[types.UInt64]) types.List[datastore_smm_types.DataStoreCustomRankingResult]
+	InsertOrUpdateCustomRanking(dataID types.UInt64, applicationID, score types.UInt32) *nex.Error
+	GetCourseRecordByDataIDAndSlot(dataID types.UInt64, slot types.UInt8) (datastore_smm_types.DataStoreGetCourseRecordResult, *nex.Error)
+	InsertOrUpdateCourseRecord(dataID types.UInt64, slot types.UInt8, pid types.PID, score types.Int32) *nex.Error
+	GetBufferQueuesByDataIDAndSlot(dataID types.UInt64, slot types.UInt32) (types.List[types.QBuffer], *nex.Error)
+	InsertOrUpdateBufferQueueData(dataID types.UInt64, slot types.UInt32, buffer types.QBuffer) *nex.Error
+
+	// EnsureEventCourseMetadata makes sure the event course metadata object
+	// exists and records the given size, which is the size of its file in storage
+	EnsureEventCourseMetadata(size uint64) error
+
+	Close() error
+}

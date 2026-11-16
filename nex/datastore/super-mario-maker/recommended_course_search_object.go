@@ -5,8 +5,8 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
-	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
+	"github.com/PretendoNetwork/super-mario-maker/store"
 )
 
 func RecommendedCourseSearchObject(err error, packet nex.PacketInterface, callID uint32, param datastore_types.DataStoreSearchParam, extraData types.List[types.String]) (*nex.RMCMessage, *nex.Error) {
@@ -38,13 +38,13 @@ func RecommendedCourseSearchObject(err error, packet nex.PacketInterface, callID
 	// * 100 Mario requests 50 courses and needs at least 32 back,
 	// * Course World on the Wii U requests 100
 	length := int(param.ResultRange.Length)
-	if length < 0 || length > datastore_smm_db.MaxRandomCourses {
-		globals.Logger.Warningf("Limiting request to %d courses (was %d)", datastore_smm_db.MaxRandomCourses, length)
-		length = datastore_smm_db.MaxRandomCourses
+	if length < 0 || length > store.MaxRandomCourses {
+		globals.Logger.Warningf("Limiting request to %d courses (was %d)", store.MaxRandomCourses, length)
+		length = store.MaxRandomCourses
 	}
 
 	// TODO - Use the offet? Real client never uses it, but might be nice for completeness sake?
-	pRankingResults, nexError := datastore_smm_db.GetRandomCoursesWithLimit(length)
+	pRankingResults, nexError := globals.Store.GetRandomCoursesWithLimit(length)
 	if nexError != nil {
 		return nil, nexError
 	}

@@ -21,7 +21,7 @@ func InitializeObjectByAttachFileParam(ownerPID types.PID, param datastore_smm_t
 	}
 
 	extraDataArray := make([]string, 0, len(param.PostParam.ExtraData))
-	for i := range param.PostParam.Tags {
+	for i := range param.PostParam.ExtraData {
 		extraDataArray = append(extraDataArray, string(param.PostParam.ExtraData[i]))
 	}
 

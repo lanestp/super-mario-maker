@@ -17,11 +17,9 @@ $ cd super-mario-maker
 ```
 
 ### Compiling using `go`
-To compile using Go, `go get` the required modules and then `go build` to your desired location. You may also want to tidy the go modules, though this is optional
+To compile using Go, `go build` to your desired location. The required modules are downloaded automatically, at the versions recorded in `go.mod`
 
 ```bash
-$ go get -u
-$ go mod tidy
 $ go build -o build/super-mario-maker
 ```
 
@@ -44,6 +42,26 @@ $ make
 
 The server is now built to `build/super-mario-maker`
 
+## Database
+The server can store its data in either Postgres or SQLite, chosen with `PN_SMM_DATABASE`
+
+- `postgres` is the default, and is the right choice for a large server
+- `sqlite` keeps everything in a single file and needs no database server, which suits a small private server
+
+Both pass the same set of storage tests (`store/storetest`)
+
+## Testing
+
+```bash
+$ go test ./...
+```
+
+The SQLite tests need nothing else. The Postgres tests are skipped unless `PN_SMM_TEST_POSTGRES_URI` is set to a Postgres server the tests may create and drop databases on, for example
+
+```bash
+$ PN_SMM_TEST_POSTGRES_URI="postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable" go test ./... -p 1
+```
+
 ## Configuration
 All configuration options are handled via environment variables
 
@@ -51,13 +69,16 @@ All configuration options are handled via environment variables
 
 | Name                                | Description                                    | Required                            |
 | ----------------------------------- | ---------------------------------------------- | ----------------------------------- |
-| `PN_SMM_POSTGRES_URI`               | Fully qualified URI to your Postgres server    | Yes                                 |
+| `PN_SMM_DATABASE`                   | Database to use, `postgres` or `sqlite`        | No (Defaults to `postgres`)         |
+| `PN_SMM_POSTGRES_URI`               | Fully qualified URI to your Postgres server    | Yes, when using `postgres`          |
+| `PN_SMM_SQLITE_PATH`                | Path to the SQLite database file               | No (Defaults to `super-mario-maker.db`) |
 | `PN_SMM_AUTHENTICATION_SERVER_PORT` | Port for the authentication server             | Yes                                 |
 | `PN_SMM_SECURE_SERVER_HOST`         | Host name for the secure server                | Yes                                 |
 | `PN_SMM_SECURE_SERVER_PORT`         | Port for the secure server                     | Yes                                 |
 | `PN_SMM_CONFIG_S3_ENDPOINT`         | S3 server endpoint                             | Yes                                 |
 | `PN_SMM_CONFIG_S3_ACCESS_KEY`       | S3 access key ID                               | Yes                                 |
 | `PN_SMM_CONFIG_S3_ACCESS_SECRET`    | S3 secret                                      | Yes                                 |
+| `PN_SMM_CONFIG_S3_SECURE`           | Whether to connect to the S3 server over HTTPS | No (Defaults to `true`)             |
 | `PN_SMM_CONFIG_S3_BUCKET`           | S3 bucket                                      | Yes                                 |
 | `PN_SMM_CONFIG_S3_KEY_BASE`         | S3 Key prefix                                  | Yes                                 |
 | `PN_SMM_GRPC_SERVER_PORT`           | Port for the GRPC server                       | Yes                                 |

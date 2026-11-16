@@ -6,7 +6,6 @@ import (
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
 	datastore_super_mario_maker_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
-	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 )
 
@@ -25,13 +24,13 @@ func FollowingsLatestCourseSearchObject(err error, packet nex.PacketInterface, c
 	// * check is, so it's not done here. All other data in param seems
 	// * to be unused here.
 	for i := range param.OwnerIDs {
-		courseObjectIDs, nexError := datastore_smm_db.GetUserCourseObjectIDs(param.OwnerIDs[i])
+		courseObjectIDs, nexError := globals.Store.GetUserCourseObjectIDs(param.OwnerIDs[i])
 		if nexError != nil {
 			return nil, nexError
 		}
 
 		// * This method seems to always use slot 0?
-		results := datastore_smm_db.GetCustomRankingsByDataIDs(types.NewUInt32(0), courseObjectIDs)
+		results := globals.Store.GetCustomRankingsByDataIDs(types.NewUInt32(0), courseObjectIDs)
 
 		for j := range results {
 			// * This is kind of backwards.

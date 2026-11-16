@@ -9,8 +9,9 @@ import (
 
 	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/plogger-go"
-	"github.com/PretendoNetwork/super-mario-maker/database"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
+	"github.com/PretendoNetwork/super-mario-maker/store/postgres"
+	"github.com/PretendoNetwork/super-mario-maker/store/sqlite"
 	"github.com/joho/godotenv"
 
 	"github.com/PretendoNetwork/nex-go/v2"
@@ -47,7 +48,17 @@ func init() {
 	accountGRPCPort := os.Getenv("PN_SMM_ACCOUNT_GRPC_PORT")
 	accountGRPCAPIKey := os.Getenv("PN_SMM_ACCOUNT_GRPC_API_KEY")
 
-	if strings.TrimSpace(postgresURI) == "" {
+	databaseBackend := strings.ToLower(strings.TrimSpace(os.Getenv("PN_SMM_DATABASE")))
+	if databaseBackend == "" {
+		databaseBackend = "postgres"
+	}
+
+	if databaseBackend != "postgres" && databaseBackend != "sqlite" {
+		globals.Logger.Errorf("PN_SMM_DATABASE is not a supported database. Expected postgres or sqlite, got %s", databaseBackend)
+		os.Exit(1)
+	}
+
+	if databaseBackend == "postgres" && strings.TrimSpace(postgresURI) == "" {
 		globals.Logger.Error("PN_SMM_POSTGRES_URI environment variable not set")
 		os.Exit(0)
 	}
@@ -162,6 +173,52 @@ func init() {
 	globals.MinIOClient = minIOClient
 	globals.Presigner = globals.NewS3Presigner(globals.MinIOClient)
 
-	// * Connect to and setup databases
-	database.ConnectPostgres()
+	// * Connect to and setup the database
+	switch databaseBackend {
+	case "sqlite":
+		sqlitePath := strings.TrimSpace(os.Getenv("PN_SMM_SQLITE_PATH"))
+		if sqlitePath == "" {
+			sqlitePath = "super-mario-maker.db"
+		}
+
+		sqliteStore, err := sqlite.Open(sqlitePath)
+		if err != nil {
+			globals.Logger.Criticalf("Failed to open SQLite database %s: %v", sqlitePath, err)
+			os.Exit(1)
+		}
+
+		globals.Logger.Successf("Opened SQLite database %s", sqlitePath)
+
+		globals.Store = sqliteStore
+	default:
+		globals.Store = postgres.Open()
+	}
+
+	ensureEventCourseMetadataFileExists()
+}
+
+func ensureEventCourseMetadataFileExists() {
+	// * The event course metadata file is REQUIRED for
+	// * Super Mario Maker to open Course World. This
+	// * ensures that it exists both in S3 and in the
+	// * database before booting. It has the reserved
+	// * DataID 900000
+	bucket := os.Getenv("PN_SMM_CONFIG_S3_BUCKET")
+	key := "900000.bin"
+
+	objectSizeS3, err := globals.S3ObjectSize(bucket, key)
+	if err != nil {
+		globals.Logger.Errorf("Failed to stat event course metadata file. Ensure your S3 credentials are correct and the 900000.bin file is uploaded to your bucket. S3 error: %s", err.Error())
+		os.Exit(0)
+	}
+
+	globals.Logger.Success("Event course metadata file found. Verifying database")
+
+	err = globals.Store.EnsureEventCourseMetadata(objectSizeS3)
+	if err != nil {
+		globals.Logger.Errorf("Error creating event course metadata object: %s", err.Error())
+		os.Exit(1)
+	}
+
+	globals.Logger.Success("Event course metadata object found and is up to date!")
 }

@@ -11,12 +11,13 @@ import (
 	"github.com/PretendoNetwork/super-mario-maker/database"
 	datastore_db "github.com/PretendoNetwork/super-mario-maker/database/datastore"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
+	"github.com/PretendoNetwork/super-mario-maker/store"
 	"github.com/lib/pq"
 )
 
 // MaxRandomCourses is the most courses a single random course search will return.
 // The largest request a real client makes is 100 (Course World on the Wii U)
-const MaxRandomCourses = 100
+const MaxRandomCourses = store.MaxRandomCourses
 
 const randomCourseColumns = `
 	object.data_id,
@@ -160,9 +161,9 @@ func queryRandomCourses(query string, args ...any) (types.List[datastore_super_m
 			&course.MetaInfo.DataType,
 			&course.MetaInfo.MetaBinary,
 			&course.MetaInfo.Permission.Permission,
-			pq.Array(&course.MetaInfo.Permission.RecipientIDs),
+			datastore_db.PIDArray(&course.MetaInfo.Permission.RecipientIDs),
 			&course.MetaInfo.DelPermission.Permission,
-			pq.Array(&course.MetaInfo.DelPermission.RecipientIDs),
+			datastore_db.PIDArray(&course.MetaInfo.DelPermission.RecipientIDs),
 			&course.MetaInfo.Period,
 			&course.MetaInfo.ReferDataID,
 			&course.MetaInfo.Flag,

@@ -52,6 +52,7 @@ func Run(t *testing.T, backend Backend) {
 		{"UnderReview", testUnderReview},
 		{"EventCourseMetadata", testEventCourseMetadata},
 		{"Accounts", testAccounts},
+		{"AccountTokens", testAccountTokens},
 	}
 
 	for _, test := range tests {
@@ -825,5 +826,55 @@ func testAccounts(t *testing.T, s store.Store, _ Backend) {
 	err = s.SetAccountPasswordHash(12345, "a password hash")
 	if !errors.Is(err, store.ErrAccountNotFound) {
 		t.Errorf("setting the password hash of an account which does not exist gave %v, want ErrAccountNotFound", err)
+	}
+}
+
+func testAccountTokens(t *testing.T, s store.Store, _ Backend) {
+	_, err := s.GetAccountToken("no such token")
+	if !errors.Is(err, store.ErrTokenNotFound) {
+		t.Fatalf("getting a token which does not exist gave %v, want ErrTokenNotFound", err)
+	}
+
+	now := time.Now()
+
+	tokens := map[string]store.AccountToken{
+		"access hash":  {PID: store.FirstPID, Kind: store.TokenKindAccess, ExpiresAt: now.Add(time.Hour)},
+		"refresh hash": {PID: store.FirstPID, Kind: store.TokenKindRefresh, ExpiresAt: now.Add(12 * time.Hour)},
+		"expired hash": {PID: store.FirstPID + 1, Kind: store.TokenKindAccess, ExpiresAt: now.Add(-time.Hour)},
+	}
+
+	for hash, token := range tokens {
+		if err := s.CreateAccountToken(hash, token); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for hash, want := range tokens {
+		got, err := s.GetAccountToken(hash)
+		if err != nil {
+			t.Fatalf("getting %q: %v", hash, err)
+		}
+
+		if got.PID != want.PID || got.Kind != want.Kind || got.ExpiresAt.Sub(want.ExpiresAt).Abs() > time.Second {
+			t.Errorf("%q is %+v, want %+v", hash, got, want)
+		}
+	}
+
+	if err := s.CreateAccountToken("access hash", tokens["access hash"]); err == nil {
+		t.Error("storing the same token hash twice gave no error")
+	}
+
+	if err := s.DeleteAccountTokensExpiredBefore(now); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.GetAccountToken("expired hash"); !errors.Is(err, store.ErrTokenNotFound) {
+		t.Errorf("an expired token was still there after deleting expired tokens: %v", err)
+	}
+
+	for _, hash := range []string{"access hash", "refresh hash"} {
+		if _, err := s.GetAccountToken(hash); err != nil {
+			t.Errorf("%q was deleted with the expired tokens: %v", hash, err)
+		}
 	}
 }

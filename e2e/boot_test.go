@@ -5,17 +5,23 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/PretendoNetwork/plogger-go"
+	"github.com/PretendoNetwork/super-mario-maker/accounts"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 	"github.com/PretendoNetwork/super-mario-maker/internal/s3test"
 	"github.com/PretendoNetwork/super-mario-maker/store"
@@ -107,6 +113,7 @@ type server struct {
 	AuthenticationPort int
 	SecurePort         int
 	GRPCPort           int
+	AccountAPIPort     int
 	DatabasePath       string
 	S3                 *s3test.Server
 
@@ -120,16 +127,42 @@ type server struct {
 func startServer(t *testing.T, s3 *s3test.Server) *server {
 	t.Helper()
 
+	return startServerWith(t, s3, nil)
+}
+
+// * Like startServer, but first calls setup with the database
+// * the server will use, so that it can be filled in
+func startServerWith(t *testing.T, s3 *s3test.Server, setup func(database *sqlite.Store)) *server {
+	t.Helper()
+
 	directory := t.TempDir()
 
 	started := &server{
 		AuthenticationPort: freeUDPPort(t),
 		SecurePort:         freeUDPPort(t),
 		GRPCPort:           freeTCPPort(t),
+		AccountAPIPort:     freeTCPPort(t),
 		DatabasePath:       filepath.Join(directory, "smm.db"),
 		S3:                 s3,
 		output:             &bytes.Buffer{},
 		exited:             make(chan error, 1),
+	}
+
+	if setup != nil {
+		if globals.Logger == nil {
+			globals.Logger = plogger.NewLogger()
+		}
+
+		database, err := sqlite.Open(started.DatabasePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		setup(database)
+
+		if err := database.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	started.command = exec.Command(serverBinary(t))
@@ -142,6 +175,7 @@ func startServer(t *testing.T, s3 *s3test.Server) *server {
 		"PN_SMM_DATABASE=sqlite",
 		"PN_SMM_SQLITE_PATH=" + started.DatabasePath,
 		"PN_SMM_ACCOUNTS=local",
+		"PN_SMM_ACCOUNT_HTTP_PORT=" + strconv.Itoa(started.AccountAPIPort),
 		"PN_SMM_AUTHENTICATION_SERVER_PORT=" + strconv.Itoa(started.AuthenticationPort),
 		"PN_SMM_SECURE_SERVER_HOST=127.0.0.1",
 		"PN_SMM_SECURE_SERVER_PORT=" + strconv.Itoa(started.SecurePort),
@@ -185,7 +219,7 @@ func (s *server) waitUntilReady(t *testing.T) {
 		default:
 		}
 
-		if udpPortInUse(s.AuthenticationPort) && udpPortInUse(s.SecurePort) && tcpPortInUse(s.GRPCPort) {
+		if udpPortInUse(s.AuthenticationPort) && udpPortInUse(s.SecurePort) && tcpPortInUse(s.GRPCPort) && tcpPortInUse(s.AccountAPIPort) {
 			return
 		}
 
@@ -254,5 +288,97 @@ func TestServerRefusesToBootWithoutEventCourseMetadata(t *testing.T) {
 
 	if !bytes.Contains(started.output.Bytes(), []byte("900000.bin")) {
 		t.Errorf("the server did not say which file is missing:\n%s", started.output.String())
+	}
+}
+
+// * Finds the text of the first XML element with the given name
+func xmlField(t *testing.T, document, name string) string {
+	t.Helper()
+
+	decoder := xml.NewDecoder(strings.NewReader(document))
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			t.Fatalf("no <%s> in %s", name, document)
+		}
+
+		if start, ok := token.(xml.StartElement); ok && start.Name.Local == name {
+			var text string
+			if err := decoder.DecodeElement(&text, &start); err != nil {
+				t.Fatal(err)
+			}
+
+			return text
+		}
+	}
+}
+
+// * Logs in to the running server's account API the way a console does, and
+// * asks it where the game server is
+func TestConsoleCanLogInAndFindTheGameServer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs the server")
+	}
+
+	s3 := s3test.Start(t)
+	s3.Put(t, "900000.bin", []byte("event course metadata"))
+
+	var account store.Account
+
+	started := startServerWith(t, s3, func(database *sqlite.Store) {
+		var err error
+
+		account, err = accounts.Create(database, "PlayerOne", "secret123", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	started.waitUntilReady(t)
+
+	accountAPI := "http://127.0.0.1:" + strconv.Itoa(started.AccountAPIPort)
+
+	login, err := http.PostForm(accountAPI+"/v1/api/oauth20/access_token/generate", url.Values{
+		"grant_type":    {"password"},
+		"user_id":       {"PlayerOne"},
+		"password":      {accounts.NintendoPasswordHash(account.PID, "secret123")},
+		"password_type": {"hash"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginBody, _ := io.ReadAll(login.Body)
+	login.Body.Close()
+
+	if login.StatusCode != http.StatusOK {
+		t.Fatalf("login gave status %d: %s", login.StatusCode, loginBody)
+	}
+
+	request, err := http.NewRequest(http.MethodGet, accountAPI+"/v1/api/provider/nex_token/@me?game_server_id=1018DB00", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request.Header.Set("Authorization", "Bearer "+xmlField(t, string(loginBody), "token"))
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+
+	nexToken := string(body)
+
+	// * It must point at the authentication server this same process is running
+	if host, port := xmlField(t, nexToken, "host"), xmlField(t, nexToken, "port"); host != "127.0.0.1" || port != strconv.Itoa(started.AuthenticationPort) {
+		t.Errorf("the game server was given as %s:%s, want 127.0.0.1:%d", host, port, started.AuthenticationPort)
+	}
+
+	if xmlField(t, nexToken, "nex_password") != account.NEXPassword || xmlField(t, nexToken, "pid") != strconv.Itoa(int(account.PID)) {
+		t.Errorf("got the wrong account details: %s", nexToken)
 	}
 }

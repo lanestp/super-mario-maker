@@ -77,3 +77,36 @@ func scanAccount(row *sql.Row) (store.Account, error) {
 
 	return account, nil
 }
+
+func (s *Store) CreateAccountToken(tokenHash string, token store.AccountToken) error {
+	_, err := s.db.Exec(`INSERT INTO account_tokens (token_hash, pid, kind, expires_at) VALUES (?, ?, ?, ?)`,
+		tokenHash, int64(token.PID), token.Kind, toTimestamp(token.ExpiresAt),
+	)
+
+	return err
+}
+
+func (s *Store) GetAccountToken(tokenHash string) (store.AccountToken, error) {
+	var token store.AccountToken
+	var pid, expiresAt int64
+
+	err := s.db.QueryRow(`SELECT pid, kind, expires_at FROM account_tokens WHERE token_hash=?`, tokenHash).Scan(&pid, &token.Kind, &expiresAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return store.AccountToken{}, store.ErrTokenNotFound
+		}
+
+		return store.AccountToken{}, err
+	}
+
+	token.PID = uint32(pid)
+	token.ExpiresAt = fromTimestamp(expiresAt)
+
+	return token, nil
+}
+
+func (s *Store) DeleteAccountTokensExpiredBefore(when time.Time) error {
+	_, err := s.db.Exec(`DELETE FROM account_tokens WHERE expires_at < ?`, toTimestamp(when))
+
+	return err
+}

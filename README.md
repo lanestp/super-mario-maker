@@ -62,6 +62,8 @@ $ build/smm-account password <username>
 $ build/smm-account show <username>
 ```
 
+With `PN_SMM_ACCOUNT_HTTP_PORT` set, the server also answers the account requests a console makes to log in and find the game server, so no separate account server is needed. `PN_SMM_SECURE_SERVER_HOST` must then be an IPv4 address, as that is what consoles are told to connect to. Accounts can not be created through this API, only with `smm-account`
+
 The password is asked for, or read from the `SMM_ACCOUNT_PASSWORD` environment variable. Passwords are stored as a salted bcrypt hash of the hash a console sends, never as the password itself. Each account's NEX password is stored as it is, since the server needs it to talk to the console
 
 ## Testing
@@ -100,6 +102,10 @@ All configuration options are handled via environment variables
 | `PN_SMM_GRPC_SERVER_PORT`           | Port for the GRPC server                       | Yes                                 |
 | `PN_SMM_GRPC_API_KEY`               | API key for your GRPC server                   | No (Assumed to be an open gRPC API) |
 | `PN_SMM_ACCOUNTS`                   | Where accounts are kept, `grpc` or `local`     | No (Defaults to `grpc`)             |
+| `PN_SMM_ACCOUNT_HTTP_PORT`          | Port to serve the account API on               | No (Not served when not set)        |
+| `PN_SMM_ACCOUNT_HTTP_TLS_CERT`      | Certificate to serve the account API over HTTPS | No (Served over HTTP)              |
+| `PN_SMM_ACCOUNT_HTTP_TLS_KEY`       | Private key for the certificate above          | No                                  |
+| `PN_SMM_GAME_SERVER_IDS`            | Game server IDs the account API answers for    | No (Defaults to the Super Mario Maker IDs) |
 | `PN_SMM_ACCOUNT_GRPC_HOST`          | Host name for your account server gRPC service | Yes, when using `grpc` accounts     |
 | `PN_SMM_ACCOUNT_GRPC_PORT`          | Port for your account server gRPC service      | Yes, when using `grpc` accounts     |
 | `PN_SMM_ACCOUNT_GRPC_API_KEY`       | API key for your account server gRPC service   | No (Assumed to be an open gRPC API) |

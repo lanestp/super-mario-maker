@@ -187,6 +187,18 @@ func CreateTables() {
 		os.Exit(0)
 	}
 
+	// * Only a hash of each token is stored
+	_, err = Postgres.Exec(`CREATE TABLE IF NOT EXISTS account.tokens (
+		token_hash text NOT NULL PRIMARY KEY,
+		pid bigint NOT NULL,
+		kind text NOT NULL,
+		expires_at timestamptz NOT NULL
+	)`)
+	if err != nil {
+		globals.Logger.Critical(err.Error())
+		os.Exit(0)
+	}
+
 	globals.Logger.Success("Postgres tables created")
 }
 

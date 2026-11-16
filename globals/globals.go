@@ -5,6 +5,7 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2"
 	datastorecommon "github.com/PretendoNetwork/nex-protocols-common-go/v2/datastore"
 	"github.com/PretendoNetwork/plogger-go"
+	"github.com/PretendoNetwork/super-mario-maker/accountapi"
 	"github.com/PretendoNetwork/super-mario-maker/store"
 	"github.com/minio/minio-go/v7"
 	"google.golang.org/grpc"
@@ -29,3 +30,6 @@ var MinIOClient *minio.Client
 var Presigner *S3Presigner
 var GRPCAPIKey string
 var GRPCServerPort int
+
+// AccountAPI is the account HTTP API to serve, or nil when it is not enabled
+var AccountAPI *accountapi.Server

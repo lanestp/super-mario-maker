@@ -94,6 +94,13 @@ CREATE TABLE IF NOT EXISTS accounts (
 	creation_date INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS account_tokens (
+	token_hash TEXT PRIMARY KEY,
+	pid INTEGER NOT NULL,
+	kind TEXT NOT NULL,
+	expires_at INTEGER NOT NULL
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS course_records (
 	data_id INTEGER NOT NULL,
 	slot INTEGER NOT NULL,

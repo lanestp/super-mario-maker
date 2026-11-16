@@ -9,6 +9,7 @@ import (
 
 	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/plogger-go"
+	"github.com/PretendoNetwork/super-mario-maker/accountapi"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 	"github.com/PretendoNetwork/super-mario-maker/store/open"
 	"github.com/joho/godotenv"
@@ -180,6 +181,60 @@ func init() {
 	}
 
 	ensureEventCourseMetadataFileExists()
+
+	configureAccountAPI()
+}
+
+// * The account API is what a console asks where the game server
+// * is. It is only served when accounts are kept in this servers
+// * database and PN_SMM_ACCOUNT_HTTP_PORT is set
+func configureAccountAPI() {
+	accountHTTPPort := strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_HTTP_PORT"))
+	if accountHTTPPort == "" {
+		return
+	}
+
+	if !globals.LocalAccounts {
+		globals.Logger.Error("PN_SMM_ACCOUNT_HTTP_PORT is set, but the account API needs PN_SMM_ACCOUNTS to be local")
+		os.Exit(1)
+	}
+
+	port, err := strconv.Atoi(accountHTTPPort)
+	if err != nil || port < 1 || port > 65535 {
+		globals.Logger.Errorf("PN_SMM_ACCOUNT_HTTP_PORT is not a valid port. Expected 1-65535, got %s", accountHTTPPort)
+		os.Exit(1)
+	}
+
+	// * The IDs Super Mario Maker asks for, one for each region
+	gameServerIDs := []string{"1018DB00", "1018DC00", "1018DD00"}
+	if configured := strings.TrimSpace(os.Getenv("PN_SMM_GAME_SERVER_IDS")); configured != "" {
+		gameServerIDs = strings.Split(configured, ",")
+		for i := range gameServerIDs {
+			gameServerIDs[i] = strings.TrimSpace(gameServerIDs[i])
+		}
+	}
+
+	gameServerPort, _ := strconv.Atoi(os.Getenv("PN_SMM_AUTHENTICATION_SERVER_PORT"))
+
+	server := &accountapi.Server{
+		Config: accountapi.Config{
+			Accounts:       globals.Store,
+			GameServerHost: strings.TrimSpace(os.Getenv("PN_SMM_SECURE_SERVER_HOST")),
+			GameServerPort: gameServerPort,
+			GameServerIDs:  gameServerIDs,
+			LogError:       func(err error) { globals.Logger.Error(err.Error()) },
+		},
+		Port:               port,
+		TLSCertificatePath: strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_HTTP_TLS_CERT")),
+		TLSKeyPath:         strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_HTTP_TLS_KEY")),
+	}
+
+	if err := server.Config.Validate(); err != nil {
+		globals.Logger.Errorf("The account API can not be served: %s. The game server host comes from PN_SMM_SECURE_SERVER_HOST", err.Error())
+		os.Exit(1)
+	}
+
+	globals.AccountAPI = server
 }
 
 func ensureEventCourseMetadataFileExists() {

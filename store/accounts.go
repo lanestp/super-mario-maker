@@ -42,6 +42,23 @@ type NewAccount struct {
 	MiiData  []byte
 }
 
+// ErrTokenNotFound is returned when no token matches
+var ErrTokenNotFound = errors.New("token not found")
+
+// The kinds of token an account can be given when it logs in
+const (
+	TokenKindAccess  = "access"
+	TokenKindRefresh = "refresh"
+)
+
+// AccountToken is a token given to an account when it logs in over HTTP.
+// Only a hash of the token itself is stored
+type AccountToken struct {
+	PID       uint32
+	Kind      string
+	ExpiresAt time.Time
+}
+
 // AccountStore is the storage for accounts
 type AccountStore interface {
 	// CreateAccount creates an account with a new PID and NEX password
@@ -50,6 +67,11 @@ type AccountStore interface {
 	GetAccountByPID(pid uint32) (Account, error)
 	// GetAccountByUsername finds an account without regard to the case of the username
 	GetAccountByUsername(username string) (Account, error)
+
+	CreateAccountToken(tokenHash string, token AccountToken) error
+	// GetAccountToken finds a token by its hash, whether or not it has expired
+	GetAccountToken(tokenHash string) (AccountToken, error)
+	DeleteAccountTokensExpiredBefore(when time.Time) error
 }
 
 const nexPasswordCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"

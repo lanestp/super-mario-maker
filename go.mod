@@ -8,9 +8,12 @@ require (
 	github.com/PretendoNetwork/nex-protocols-common-go/v2 v2.2.2
 	github.com/PretendoNetwork/nex-protocols-go/v2 v2.2.1
 	github.com/PretendoNetwork/plogger-go v1.1.0
+	github.com/johannesboyne/gofakes3 v1.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/minio/minio-go/v7 v7.0.84
+	golang.org/x/crypto v0.59.0
+	golang.org/x/term v0.48.0
 	google.golang.org/grpc v1.70.0
 	modernc.org/sqlite v1.62.0
 )
@@ -33,14 +36,15 @@ require (
 	github.com/rasky/go-lzo v0.0.0-20200203143853-96a758eda86e // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rs/xid v1.6.0 // indirect
+	github.com/ryszard/goskiplist v0.0.0-20150312221310-2dfbae5fcf46 // indirect
 	github.com/superwhiskers/crunch/v3 v3.5.7 // indirect
-	golang.org/x/crypto v0.59.0 // indirect
+	go.shabbyrobe.org/gocovmerge v0.0.0-20230507111327-fa4f82cfbf4d // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
-	golang.org/x/term v0.48.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250204164813-702378808489 // indirect
 	google.golang.org/protobuf v1.36.4 // indirect
 	modernc.org/libc v1.80.1 // indirect

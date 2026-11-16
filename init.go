@@ -194,7 +194,7 @@ func ensureEventCourseMetadataFileExists() {
 	objectSizeS3, err := globals.S3ObjectSize(bucket, key)
 	if err != nil {
 		globals.Logger.Errorf("Failed to stat event course metadata file. Ensure your S3 credentials are correct and the 900000.bin file is uploaded to your bucket. S3 error: %s", err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	globals.Logger.Success("Event course metadata file found. Verifying database")

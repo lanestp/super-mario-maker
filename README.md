@@ -70,6 +70,8 @@ The password is asked for, or read from the `SMM_ACCOUNT_PASSWORD` environment v
 $ go test ./...
 ```
 
+The tests in `e2e` build the server and run it with SQLite, its own accounts and a fake S3 server inside the test, so they need nothing installed either. Use `go test -short ./...` to skip them
+
 The SQLite tests need nothing else. The Postgres tests are skipped unless `PN_SMM_TEST_POSTGRES_URI` is set to a Postgres server the tests may create and drop databases on, for example
 
 ```bash

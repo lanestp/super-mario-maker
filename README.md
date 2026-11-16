@@ -74,6 +74,13 @@ $ go test ./...
 
 The tests in `e2e` build the server and run it with SQLite, its own accounts and a fake S3 server inside the test, so they need nothing installed either. Use `go test -short ./...` to skip them
 
+One of them plays the part of a console, logging in over the real game protocol and uploading, downloading and rating a course. It uses a separate implementation of the protocol, written in Python, so that the server is not only checked against itself. It is skipped unless that client is set up
+
+```bash
+$ e2e/client/setup.sh
+$ PN_SMM_E2E_PYTHON=e2e/client/.venv/bin/python go test ./e2e/
+```
+
 The SQLite tests need nothing else. The Postgres tests are skipped unless `PN_SMM_TEST_POSTGRES_URI` is set to a Postgres server the tests may create and drop databases on, for example
 
 ```bash

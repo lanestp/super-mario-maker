@@ -27,3 +27,6 @@ go.work.sum
 .env
 build
 log
+# e2e test client
+e2e/client/.venv
+__pycache__

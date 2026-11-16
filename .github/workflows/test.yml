@@ -35,10 +35,19 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up the game protocol client
+        run: e2e/client/setup.sh python
+
       - name: Vet
         run: go vet ./...
 
       - name: Test
         env:
           PN_SMM_TEST_POSTGRES_URI: postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
+          PN_SMM_E2E_PYTHON: ${{ github.workspace }}/e2e/client/.venv/bin/python
         run: go test ./... -p 1 -count=1

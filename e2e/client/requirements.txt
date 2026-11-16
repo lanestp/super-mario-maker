@@ -1,0 +1,9 @@
+# The game protocol client used by the e2e tests. It is a separate
+# implementation of the protocol from the one the server uses, so that
+# the tests do not just check the server against itself. Needs Python 3.12+
+#
+# Install with e2e/client/setup.sh, not with pip directly. anynet asks
+# for the netifaces package, which no longer builds everywhere, so it is
+# installed without its dependencies and netifaces-plus is used instead
+nintendoclients==5.1.0
+anynet==1.2.2

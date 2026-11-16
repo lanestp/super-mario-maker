@@ -50,6 +50,20 @@ The server can store its data in either Postgres or SQLite, chosen with `PN_SMM_
 
 Both pass the same set of storage tests (`store/storetest`)
 
+## Accounts
+By default the server asks an account server for each player's NEX password over gRPC (`PN_SMM_ACCOUNTS=grpc`)
+
+A small private server can keep its own accounts in its database instead (`PN_SMM_ACCOUNTS=local`), and then needs no account server. Accounts are managed with the `smm-account` command, which uses the same database settings as the server
+
+```bash
+$ go build -o build/smm-account ./cmd/smm-account
+$ build/smm-account create <username>
+$ build/smm-account password <username>
+$ build/smm-account show <username>
+```
+
+The password is asked for, or read from the `SMM_ACCOUNT_PASSWORD` environment variable. Passwords are stored as a salted bcrypt hash of the hash a console sends, never as the password itself. Each account's NEX password is stored as it is, since the server needs it to talk to the console
+
 ## Testing
 
 ```bash
@@ -83,6 +97,7 @@ All configuration options are handled via environment variables
 | `PN_SMM_CONFIG_S3_KEY_BASE`         | S3 Key prefix                                  | Yes                                 |
 | `PN_SMM_GRPC_SERVER_PORT`           | Port for the GRPC server                       | Yes                                 |
 | `PN_SMM_GRPC_API_KEY`               | API key for your GRPC server                   | No (Assumed to be an open gRPC API) |
-| `PN_SMM_ACCOUNT_GRPC_HOST`          | Host name for your account server gRPC service | Yes                                 |
-| `PN_SMM_ACCOUNT_GRPC_PORT`          | Port for your account server gRPC service      | Yes                                 |
+| `PN_SMM_ACCOUNTS`                   | Where accounts are kept, `grpc` or `local`     | No (Defaults to `grpc`)             |
+| `PN_SMM_ACCOUNT_GRPC_HOST`          | Host name for your account server gRPC service | Yes, when using `grpc` accounts     |
+| `PN_SMM_ACCOUNT_GRPC_PORT`          | Port for your account server gRPC service      | Yes, when using `grpc` accounts     |
 | `PN_SMM_ACCOUNT_GRPC_API_KEY`       | API key for your account server gRPC service   | No (Assumed to be an open gRPC API) |

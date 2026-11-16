@@ -2,6 +2,9 @@ package globals
 
 import (
 	"context"
+	"errors"
+
+	"github.com/PretendoNetwork/super-mario-maker/store"
 
 	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/nex-go/v2"
@@ -11,6 +14,19 @@ import (
 )
 
 func PasswordFromPID(pid types.PID) (string, uint32) {
+	if LocalAccounts {
+		account, err := Store.GetAccountByPID(uint32(pid))
+		if err != nil {
+			if !errors.Is(err, store.ErrAccountNotFound) {
+				globals.Logger.Error(err.Error())
+			}
+
+			return "", nex.ResultCodes.RendezVous.InvalidUsername
+		}
+
+		return account.NEXPassword, 0
+	}
+
 	ctx := metadata.NewOutgoingContext(context.Background(), GRPCAccountCommonMetadata)
 
 	response, err := GRPCAccountClient.GetNEXPassword(ctx, &pb.GetNEXPasswordRequest{Pid: uint32(pid)})

@@ -34,13 +34,13 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/superwhiskers/crunch/v3 v3.5.7 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/term v0.48.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250204164813-702378808489 // indirect
 	google.golang.org/protobuf v1.36.4 // indirect
 	modernc.org/libc v1.80.1 // indirect

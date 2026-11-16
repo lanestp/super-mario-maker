@@ -83,6 +83,17 @@ CREATE TABLE IF NOT EXISTS buffer_queues (
 	PRIMARY KEY (data_id, slot, buffer)
 ) WITHOUT ROWID;
 
+CREATE TABLE IF NOT EXISTS accounts (
+	pid INTEGER PRIMARY KEY AUTOINCREMENT,
+	username TEXT NOT NULL,
+	username_lower TEXT NOT NULL UNIQUE,
+	password_hash TEXT NOT NULL DEFAULT '',
+	nex_password TEXT NOT NULL,
+	mii_name TEXT NOT NULL DEFAULT '',
+	mii_data BLOB,
+	creation_date INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS course_records (
 	data_id INTEGER NOT NULL,
 	slot INTEGER NOT NULL,
@@ -122,6 +133,13 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("setting the first DataID: %w", err)
+	}
+
+	// * Makes the first created account get store.FirstPID
+	_, err = db.Exec(`INSERT INTO sqlite_sequence (name, seq) SELECT 'accounts', ? WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name='accounts')`, store.FirstPID-1)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("setting the first PID: %w", err)
 	}
 
 	return &Store{db: db}, nil

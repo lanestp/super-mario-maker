@@ -10,8 +10,7 @@ import (
 	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
-	"github.com/PretendoNetwork/super-mario-maker/store/postgres"
-	"github.com/PretendoNetwork/super-mario-maker/store/sqlite"
+	"github.com/PretendoNetwork/super-mario-maker/store/open"
 	"github.com/joho/godotenv"
 
 	"github.com/PretendoNetwork/nex-go/v2"
@@ -38,7 +37,6 @@ func init() {
 	s3AccessSecret := os.Getenv("PN_SMM_CONFIG_S3_ACCESS_SECRET")
 	s3SecureEnv := os.Getenv("PN_SMM_CONFIG_S3_SECURE")
 
-	postgresURI := os.Getenv("PN_SMM_POSTGRES_URI")
 	authenticationServerPort := os.Getenv("PN_SMM_AUTHENTICATION_SERVER_PORT")
 	secureServerHost := os.Getenv("PN_SMM_SECURE_SERVER_HOST")
 	secureServerPort := os.Getenv("PN_SMM_SECURE_SERVER_PORT")
@@ -48,20 +46,17 @@ func init() {
 	accountGRPCPort := os.Getenv("PN_SMM_ACCOUNT_GRPC_PORT")
 	accountGRPCAPIKey := os.Getenv("PN_SMM_ACCOUNT_GRPC_API_KEY")
 
-	databaseBackend := strings.ToLower(strings.TrimSpace(os.Getenv("PN_SMM_DATABASE")))
-	if databaseBackend == "" {
-		databaseBackend = "postgres"
+	accountsMode := strings.ToLower(strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNTS")))
+	if accountsMode == "" {
+		accountsMode = "grpc"
 	}
 
-	if databaseBackend != "postgres" && databaseBackend != "sqlite" {
-		globals.Logger.Errorf("PN_SMM_DATABASE is not a supported database. Expected postgres or sqlite, got %s", databaseBackend)
+	if accountsMode != "grpc" && accountsMode != "local" {
+		globals.Logger.Errorf("PN_SMM_ACCOUNTS is not a supported account source. Expected grpc or local, got %s", accountsMode)
 		os.Exit(1)
 	}
 
-	if databaseBackend == "postgres" && strings.TrimSpace(postgresURI) == "" {
-		globals.Logger.Error("PN_SMM_POSTGRES_URI environment variable not set")
-		os.Exit(0)
-	}
+	globals.LocalAccounts = accountsMode == "local"
 
 	kerberosPassword := make([]byte, 0x10)
 	_, err = rand.Read(kerberosPassword)
@@ -121,38 +116,42 @@ func init() {
 	}
 	globals.GRPCAPIKey = gRPCAPIKey
 
-	if strings.TrimSpace(accountGRPCHost) == "" {
-		globals.Logger.Error("PN_SMM_ACCOUNT_GRPC_HOST environment variable not set")
-		os.Exit(0)
-	}
+	if globals.LocalAccounts {
+		globals.Logger.Info("Using accounts stored in this servers database. The account gRPC server is not used")
+	} else {
+		if strings.TrimSpace(accountGRPCHost) == "" {
+			globals.Logger.Error("PN_SMM_ACCOUNT_GRPC_HOST environment variable not set")
+			os.Exit(0)
+		}
 
-	if strings.TrimSpace(accountGRPCPort) == "" {
-		globals.Logger.Error("PN_SMM_ACCOUNT_GRPC_PORT environment variable not set")
-		os.Exit(0)
-	}
+		if strings.TrimSpace(accountGRPCPort) == "" {
+			globals.Logger.Error("PN_SMM_ACCOUNT_GRPC_PORT environment variable not set")
+			os.Exit(0)
+		}
 
-	if port, err := strconv.Atoi(accountGRPCPort); err != nil {
-		globals.Logger.Errorf("PN_SMM_ACCOUNT_GRPC_PORT is not a valid port. Expected 0-65535, got %s", accountGRPCPort)
-		os.Exit(0)
-	} else if port < 0 || port > 65535 {
-		globals.Logger.Errorf("PN_SMM_ACCOUNT_GRPC_PORT is not a valid port. Expected 0-65535, got %s", accountGRPCPort)
-		os.Exit(0)
-	}
+		if port, err := strconv.Atoi(accountGRPCPort); err != nil {
+			globals.Logger.Errorf("PN_SMM_ACCOUNT_GRPC_PORT is not a valid port. Expected 0-65535, got %s", accountGRPCPort)
+			os.Exit(0)
+		} else if port < 0 || port > 65535 {
+			globals.Logger.Errorf("PN_SMM_ACCOUNT_GRPC_PORT is not a valid port. Expected 0-65535, got %s", accountGRPCPort)
+			os.Exit(0)
+		}
 
-	if strings.TrimSpace(accountGRPCAPIKey) == "" {
-		globals.Logger.Warning("Insecure gRPC server detected. PN_SMM_ACCOUNT_GRPC_API_KEY environment variable not set")
-	}
+		if strings.TrimSpace(accountGRPCAPIKey) == "" {
+			globals.Logger.Warning("Insecure gRPC server detected. PN_SMM_ACCOUNT_GRPC_API_KEY environment variable not set")
+		}
 
-	globals.GRPCAccountClientConnection, err = grpc.NewClient(fmt.Sprintf("%s:%s", accountGRPCHost, accountGRPCPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		globals.Logger.Criticalf("Failed to connect to account gRPC server: %v", err)
-		os.Exit(0)
-	}
+		globals.GRPCAccountClientConnection, err = grpc.NewClient(fmt.Sprintf("%s:%s", accountGRPCHost, accountGRPCPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			globals.Logger.Criticalf("Failed to connect to account gRPC server: %v", err)
+			os.Exit(0)
+		}
 
-	globals.GRPCAccountClient = pb.NewAccountClient(globals.GRPCAccountClientConnection)
-	globals.GRPCAccountCommonMetadata = metadata.Pairs(
-		"X-API-Key", accountGRPCAPIKey,
-	)
+		globals.GRPCAccountClient = pb.NewAccountClient(globals.GRPCAccountClientConnection)
+		globals.GRPCAccountCommonMetadata = metadata.Pairs(
+			"X-API-Key", accountGRPCAPIKey,
+		)
+	}
 
 	staticCredentials := credentials.NewStaticV4(s3AccessKey, s3AccessSecret, "")
 
@@ -174,24 +173,10 @@ func init() {
 	globals.Presigner = globals.NewS3Presigner(globals.MinIOClient)
 
 	// * Connect to and setup the database
-	switch databaseBackend {
-	case "sqlite":
-		sqlitePath := strings.TrimSpace(os.Getenv("PN_SMM_SQLITE_PATH"))
-		if sqlitePath == "" {
-			sqlitePath = "super-mario-maker.db"
-		}
-
-		sqliteStore, err := sqlite.Open(sqlitePath)
-		if err != nil {
-			globals.Logger.Criticalf("Failed to open SQLite database %s: %v", sqlitePath, err)
-			os.Exit(1)
-		}
-
-		globals.Logger.Successf("Opened SQLite database %s", sqlitePath)
-
-		globals.Store = sqliteStore
-	default:
-		globals.Store = postgres.Open()
+	globals.Store, err = open.FromEnv()
+	if err != nil {
+		globals.Logger.Critical(err.Error())
+		os.Exit(1)
 	}
 
 	ensureEventCourseMetadataFileExists()

@@ -151,6 +151,42 @@ func CreateTables() {
 		os.Exit(0)
 	}
 
+	// * Accounts are only used by servers which keep their own
+	// * accounts instead of using an account server
+	_, err = Postgres.Exec(`CREATE SCHEMA IF NOT EXISTS account`)
+	if err != nil {
+		globals.Logger.Critical(err.Error())
+		os.Exit(0)
+	}
+
+	// * PIDs below 1800000000 are left free for the special accounts NEX itself uses
+	_, err = Postgres.Exec(`CREATE SEQUENCE IF NOT EXISTS account.pid_seq
+		INCREMENT 1
+		MINVALUE 1
+		MAXVALUE 4294967295
+		START 1800000000
+		CACHE 1`,
+	)
+	if err != nil {
+		globals.Logger.Critical(err.Error())
+		os.Exit(0)
+	}
+
+	_, err = Postgres.Exec(`CREATE TABLE IF NOT EXISTS account.accounts (
+		pid bigint NOT NULL DEFAULT nextval('account.pid_seq') PRIMARY KEY,
+		username text NOT NULL,
+		username_lower text NOT NULL UNIQUE,
+		password_hash text NOT NULL DEFAULT '',
+		nex_password text NOT NULL,
+		mii_name text NOT NULL DEFAULT '',
+		mii_data bytea NOT NULL DEFAULT '',
+		creation_date timestamptz NOT NULL
+	)`)
+	if err != nil {
+		globals.Logger.Critical(err.Error())
+		os.Exit(0)
+	}
+
 	globals.Logger.Success("Postgres tables created")
 }
 

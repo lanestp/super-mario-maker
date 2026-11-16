@@ -18,6 +18,9 @@ var AuthenticationEndpoint *nex.PRUDPEndPoint
 var SecureServer *nex.PRUDPServer
 var SecureEndpoint *nex.PRUDPEndPoint
 var Store store.Store
+
+// LocalAccounts is true when accounts are kept in Store, instead of on an account server
+var LocalAccounts bool
 var DatastoreCommon *datastorecommon.CommonProtocol
 var GRPCAccountClientConnection *grpc.ClientConn
 var GRPCAccountClient pb.AccountClient

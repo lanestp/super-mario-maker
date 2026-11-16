@@ -3,8 +3,10 @@ package storetest
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
@@ -49,6 +51,7 @@ func Run(t *testing.T, backend Backend) {
 		{"RandomCoursesSkipUnavailable", testRandomCoursesSkipUnavailable},
 		{"UnderReview", testUnderReview},
 		{"EventCourseMetadata", testEventCourseMetadata},
+		{"Accounts", testAccounts},
 	}
 
 	for _, test := range tests {
@@ -737,5 +740,90 @@ func testEventCourseMetadata(t *testing.T, s store.Store, _ Backend) {
 	// * The reserved DataID must not change where new objects start
 	if dataID := createObject(t, s, objectOptions{owner: 1000, name: "course", dataType: courseDataType}); dataID != store.FirstDataID {
 		t.Errorf("first object got DataID %d, want %d", dataID, store.FirstDataID)
+	}
+}
+
+func testAccounts(t *testing.T, s store.Store, _ Backend) {
+	_, err := s.GetAccountByPID(store.FirstPID)
+	if !errors.Is(err, store.ErrAccountNotFound) {
+		t.Fatalf("getting an account which does not exist gave %v, want ErrAccountNotFound", err)
+	}
+
+	_, err = s.GetAccountByUsername("nobody")
+	if !errors.Is(err, store.ErrAccountNotFound) {
+		t.Fatalf("getting a username which does not exist gave %v, want ErrAccountNotFound", err)
+	}
+
+	before := time.Now().Add(-time.Minute)
+
+	first, err := s.CreateAccount(store.NewAccount{Username: "FirstPlayer", MiiName: "First", MiiData: []byte{1, 2, 3}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if first.PID != store.FirstPID {
+		t.Errorf("first account got PID %d, want %d", first.PID, store.FirstPID)
+	}
+
+	if first.Username != "FirstPlayer" || first.MiiName != "First" || !bytes.Equal(first.MiiData, []byte{1, 2, 3}) || first.PasswordHash != "" {
+		t.Errorf("got account %+v", first)
+	}
+
+	if len(first.NEXPassword) != 16 {
+		t.Errorf("got NEX password of %d characters, want 16", len(first.NEXPassword))
+	}
+
+	if first.CreatedAt.Before(before) || first.CreatedAt.After(time.Now().Add(time.Minute)) {
+		t.Errorf("got creation time %s, want about now", first.CreatedAt)
+	}
+
+	second, err := s.CreateAccount(store.NewAccount{Username: "second_player"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if second.PID != store.FirstPID+1 {
+		t.Errorf("second account got PID %d, want %d", second.PID, store.FirstPID+1)
+	}
+
+	if second.NEXPassword == first.NEXPassword {
+		t.Error("two accounts got the same NEX password")
+	}
+
+	// * Usernames differing only by case are the same username
+	_, err = s.CreateAccount(store.NewAccount{Username: "FIRSTPLAYER"})
+	if !errors.Is(err, store.ErrUsernameTaken) {
+		t.Errorf("creating an account with a taken username gave %v, want ErrUsernameTaken", err)
+	}
+
+	byUsername, err := s.GetAccountByUsername("firstplayer")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if byUsername.PID != first.PID || byUsername.Username != "FirstPlayer" || byUsername.NEXPassword != first.NEXPassword {
+		t.Errorf("getting by username gave PID %d and username %q", byUsername.PID, byUsername.Username)
+	}
+
+	if err := s.SetAccountPasswordHash(first.PID, "a password hash"); err != nil {
+		t.Fatal(err)
+	}
+
+	byPID, err := s.GetAccountByPID(first.PID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if byPID.PasswordHash != "a password hash" || byPID.NEXPassword != first.NEXPassword {
+		t.Errorf("after setting the password hash, got hash %q", byPID.PasswordHash)
+	}
+
+	if other, err := s.GetAccountByPID(second.PID); err != nil || other.PasswordHash != "" {
+		t.Errorf("setting one account's password hash changed another's: %q, %v", other.PasswordHash, err)
+	}
+
+	err = s.SetAccountPasswordHash(12345, "a password hash")
+	if !errors.Is(err, store.ErrAccountNotFound) {
+		t.Errorf("setting the password hash of an account which does not exist gave %v, want ErrAccountNotFound", err)
 	}
 }

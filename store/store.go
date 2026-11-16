@@ -22,8 +22,10 @@ const EventCourseMetadataDataID = 900000
 // event courses use DataIDs up to 930050, so objects must start after that
 const FirstDataID = 940000
 
-// Store is the storage used by the DataStore protocol
+// Store is the storage used by the server
 type Store interface {
+	AccountStore
+
 	// * Objects
 	InitializeObjectByPreparePostParam(ownerPID types.PID, param datastore_types.DataStorePreparePostParam) (uint64, *nex.Error)
 	InitializeObjectByAttachFileParam(ownerPID types.PID, param datastore_smm_types.DataStoreAttachFileParam) (types.UInt64, *nex.Error)

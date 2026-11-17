@@ -30,7 +30,7 @@ const Path = "/join"
 // * done once per player, so this is plenty, and it keeps someone who
 // * has the invite code from making accounts in bulk
 const (
-	MaxTries = 10
+	MaxTries = 100
 	Window   = time.Hour
 )
 

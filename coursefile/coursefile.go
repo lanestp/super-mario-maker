@@ -52,7 +52,15 @@ var (
 	zipNames = [partCount]string{"thumbnail0.tnl", "course_data.cdt", "course_data_sub.cdt", "thumbnail1.tnl"}
 )
 
-// Pack returns the file a game would upload for the course
+// Pack returns the file a game would upload for the course.
+//
+// NOT CONFIRMED IN A GAME. Files made by Pack unpack correctly with the
+// decompressor Pretendo publishes, and a game shows their pictures, but
+// the 50 courses packed with it so far were all refused by a real game
+// as broken when played. Those courses also came from another source
+// than the ones that worked, so it is not known whether Pack or the
+// course data was at fault. Files a game uploaded itself do not go
+// through Pack and are not affected
 func (c *Course) Pack() ([]byte, error) {
 	var file []byte
 

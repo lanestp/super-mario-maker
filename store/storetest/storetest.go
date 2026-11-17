@@ -44,6 +44,7 @@ func Run(t *testing.T, backend Backend) {
 		{"PersistenceTarget", testPersistenceTarget},
 		{"Ratings", testRatings},
 		{"CustomRankings", testCustomRankings},
+		{"RankedAndLatestObjects", testRankedAndLatestObjects},
 		{"CourseRecords", testCourseRecords},
 		{"BufferQueues", testBufferQueues},
 		{"UserCourseObjectIDs", testUserCourseObjectIDs},
@@ -877,4 +878,61 @@ func testAccountTokens(t *testing.T, s store.Store, _ Backend) {
 			t.Errorf("%q was deleted with the expired tokens: %v", hash, err)
 		}
 	}
+}
+
+func testRankedAndLatestObjects(t *testing.T, s store.Store, backend Backend) {
+	low := createCourse(t, s, 1000, "low")
+	high := createCourse(t, s, 1000, "high")
+	middle := createCourse(t, s, 1001, "middle")
+	tied := createCourse(t, s, 1001, "tied with middle")
+	deleted := createCourse(t, s, 1002, "deleted")
+	underReview := createCourse(t, s, 1002, "under review")
+	notUploaded := createObject(t, s, objectOptions{owner: 1002, name: "not uploaded", dataType: courseDataType, incomplete: true})
+	maker := createObject(t, s, objectOptions{owner: 1000, name: "maker", dataType: 1})
+
+	for dataID, stars := range map[types.UInt64]types.UInt32{low: 1, high: 50, middle: 7, tied: 7, deleted: 99, underReview: 98} {
+		mustSucceed(t, s.InsertOrUpdateCustomRanking(dataID, 0, stars))
+	}
+
+	// * A ranking for another application, which only the maker is in
+	mustSucceed(t, s.InsertOrUpdateCustomRanking(maker, 300000000, 12))
+
+	// * Rankings can only be given to available objects, so these are made unavailable after
+	mustSucceed(t, s.DeleteObjectByDataID(deleted))
+	backend.SetUnderReview(t, uint64(underReview))
+
+	check := func(what string, got types.List[types.UInt64], nexError *nex.Error, want ...types.UInt64) {
+		t.Helper()
+		mustSucceed(t, nexError)
+
+		if len(got) != len(want) {
+			t.Fatalf("%s: got %v, want %v", what, got, want)
+		}
+
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("%s: got %v, want %v", what, got, want)
+			}
+		}
+	}
+
+	ranked, nexError := s.GetCustomRankingDataIDs(0, 0, 100)
+	check("highest score first, ties by lowest DataID", ranked, nexError, high, middle, tied, low)
+
+	ranked, nexError = s.GetCustomRankingDataIDs(0, 1, 2)
+	check("second and third in the ranking", ranked, nexError, middle, tied)
+
+	ranked, nexError = s.GetCustomRankingDataIDs(0, 10, 5)
+	check("past the end of the ranking", ranked, nexError)
+
+	ranked, nexError = s.GetCustomRankingDataIDs(300000000, 0, 100)
+	check("ranking of another application", ranked, nexError, maker)
+
+	latest, nexError := s.GetLatestCourseObjectIDs(0, 100)
+	check("newest course first", latest, nexError, tied, middle, high, low)
+
+	latest, nexError = s.GetLatestCourseObjectIDs(1, 2)
+	check("second and third newest", latest, nexError, middle, high)
+
+	_ = notUploaded
 }

@@ -52,6 +52,13 @@ type Store interface {
 	GetUserCourseObjectIDs(ownerPID types.PID) (types.List[types.UInt64], *nex.Error)
 	GetRandomCoursesWithLimit(limit int) (types.List[datastore_smm_types.DataStoreCustomRankingResult], *nex.Error)
 	GetCustomRankingsByDataIDs(applicationID types.UInt32, dataIDs types.List[types.UInt64]) types.List[datastore_smm_types.DataStoreCustomRankingResult]
+	// GetCustomRankingDataIDs lists the objects ranked for an application
+	// that can be handed out, highest score first. Objects with the same
+	// score are listed lowest DataID first
+	GetCustomRankingDataIDs(applicationID types.UInt32, offset, limit int) (types.List[types.UInt64], *nex.Error)
+	// GetLatestCourseObjectIDs lists the courses shown in Course World,
+	// newest first
+	GetLatestCourseObjectIDs(offset, limit int) (types.List[types.UInt64], *nex.Error)
 	InsertOrUpdateCustomRanking(dataID types.UInt64, applicationID, score types.UInt32) *nex.Error
 	GetCourseRecordByDataIDAndSlot(dataID types.UInt64, slot types.UInt8) (datastore_smm_types.DataStoreGetCourseRecordResult, *nex.Error)
 	InsertOrUpdateCourseRecord(dataID types.UInt64, slot types.UInt8, pid types.PID, score types.Int32) *nex.Error

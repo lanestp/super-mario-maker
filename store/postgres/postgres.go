@@ -108,6 +108,14 @@ func (Store) GetCustomRankingsByDataIDs(applicationID types.UInt32, dataIDs type
 	return datastore_smm_db.GetCustomRankingsByDataIDs(applicationID, dataIDs)
 }
 
+func (Store) GetCustomRankingDataIDs(applicationID types.UInt32, offset, limit int) (types.List[types.UInt64], *nex.Error) {
+	return datastore_smm_db.GetCustomRankingDataIDs(applicationID, offset, limit)
+}
+
+func (Store) GetLatestCourseObjectIDs(offset, limit int) (types.List[types.UInt64], *nex.Error) {
+	return datastore_smm_db.GetLatestCourseObjectIDs(offset, limit)
+}
+
 func (Store) InsertOrUpdateCustomRanking(dataID types.UInt64, applicationID, score types.UInt32) *nex.Error {
 	return datastore_smm_db.InsertOrUpdateCustomRanking(dataID, applicationID, score)
 }

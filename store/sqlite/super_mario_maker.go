@@ -272,3 +272,50 @@ func (s *Store) InsertOrUpdateBufferQueueData(dataID types.UInt64, slot types.UI
 
 	return nil
 }
+
+func (s *Store) GetCustomRankingDataIDs(applicationID types.UInt32, offset, limit int) (types.List[types.UInt64], *nex.Error) {
+	return s.objectIDs(`SELECT object.data_id
+		FROM objects object
+		JOIN object_custom_rankings ranking ON ranking.data_id = object.data_id AND ranking.application_id = ?
+		WHERE object.upload_completed=1 AND object.deleted=0 AND object.under_review=0
+		ORDER BY ranking.value DESC, object.data_id
+		LIMIT ? OFFSET ?`, int64(applicationID), max(limit, 0), max(offset, 0))
+}
+
+func (s *Store) GetLatestCourseObjectIDs(offset, limit int) (types.List[types.UInt64], *nex.Error) {
+	// * The same courses GetRandomCoursesWithLimit picks from
+	return s.objectIDs(`SELECT object.data_id
+		FROM objects object
+		JOIN object_custom_rankings ranking ON ranking.data_id = object.data_id AND ranking.application_id = 0
+		WHERE object.upload_completed=1 AND object.deleted=0 AND object.under_review=0
+			AND object.data_type > 2 AND object.data_type < 50
+		ORDER BY object.creation_date DESC, object.data_id DESC
+		LIMIT ? OFFSET ?`, max(limit, 0), max(offset, 0))
+}
+
+func (s *Store) objectIDs(query string, arguments ...any) (types.List[types.UInt64], *nex.Error) {
+	ids := types.NewList[types.UInt64]()
+
+	rows, err := s.db.Query(query, arguments...)
+	if err != nil {
+		return nil, unknownError(err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var dataID int64
+
+		if err := rows.Scan(&dataID); err != nil {
+			return nil, unknownError(err)
+		}
+
+		ids = append(ids, types.UInt64(dataID))
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, unknownError(err)
+	}
+
+	return ids, nil
+}

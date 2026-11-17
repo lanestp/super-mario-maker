@@ -16,12 +16,21 @@ func (s *Store) CreateAccount(account store.NewAccount) (store.Account, error) {
 
 	var pid int64
 
-	err = s.db.QueryRow(`INSERT INTO accounts (username, username_lower, nex_password, mii_name, mii_data, creation_date)
-		VALUES (?, ?, ?, ?, ?, ?) RETURNING pid`,
-		account.Username, strings.ToLower(account.Username), nexPassword, account.MiiName, account.MiiData, toTimestamp(time.Now()),
+	// * NULL makes SQLite pick the next PID
+	var givenPID any
+	if account.PID != 0 {
+		givenPID = int64(account.PID)
+	}
+
+	err = s.db.QueryRow(`INSERT INTO accounts (pid, username, username_lower, nex_password, mii_name, mii_data, creation_date)
+		VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING pid`,
+		givenPID, account.Username, strings.ToLower(account.Username), nexPassword, account.MiiName, account.MiiData, toTimestamp(time.Now()),
 	).Scan(&pid)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		switch {
+		case strings.Contains(err.Error(), "UNIQUE constraint failed: accounts.pid"):
+			return store.Account{}, store.ErrPIDTaken
+		case strings.Contains(err.Error(), "UNIQUE constraint failed"):
 			return store.Account{}, store.ErrUsernameTaken
 		}
 

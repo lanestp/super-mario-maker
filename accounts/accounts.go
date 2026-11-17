@@ -25,6 +25,15 @@ var ErrWrongPassword = errors.New("wrong password")
 
 var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]{6,16}$`)
 
+// ValidUsername returns ErrInvalidUsername for a username that can not be used
+func ValidUsername(username string) error {
+	if !usernamePattern.MatchString(username) {
+		return ErrInvalidUsername
+	}
+
+	return nil
+}
+
 // NintendoPasswordHash hashes a password the way a console does before
 // sending it. The console never sends the password itself
 func NintendoPasswordHash(pid uint32, password string) string {
@@ -39,8 +48,8 @@ func NintendoPasswordHash(pid uint32, password string) string {
 
 // Create makes a new account which can log in with the given password
 func Create(accountStore store.AccountStore, username, password, miiName string) (store.Account, error) {
-	if !usernamePattern.MatchString(username) {
-		return store.Account{}, ErrInvalidUsername
+	if err := ValidUsername(username); err != nil {
+		return store.Account{}, err
 	}
 
 	if len(password) < 6 || len(password) > 16 {

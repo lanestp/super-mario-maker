@@ -27,17 +27,38 @@ func (Store) CreateAccount(account store.NewAccount) (store.Account, error) {
 
 	var pid int64
 
-	err = database.Postgres.QueryRow(`INSERT INTO account.accounts (username, username_lower, nex_password, mii_name, mii_data, creation_date)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING pid`,
-		account.Username, strings.ToLower(account.Username), nexPassword, account.MiiName, miiData, time.Now(),
-	).Scan(&pid)
+	if account.PID == 0 {
+		err = database.Postgres.QueryRow(`INSERT INTO account.accounts (username, username_lower, nex_password, mii_name, mii_data, creation_date)
+			VALUES ($1, $2, $3, $4, $5, $6) RETURNING pid`,
+			account.Username, strings.ToLower(account.Username), nexPassword, account.MiiName, miiData, time.Now(),
+		).Scan(&pid)
+	} else {
+		err = database.Postgres.QueryRow(`INSERT INTO account.accounts (pid, username, username_lower, nex_password, mii_name, mii_data, creation_date)
+			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING pid`,
+			int64(account.PID), account.Username, strings.ToLower(account.Username), nexPassword, account.MiiName, miiData, time.Now(),
+		).Scan(&pid)
+	}
+
 	if err != nil {
 		var pqError *pq.Error
 		if errors.As(err, &pqError) && pqError.Code == uniqueViolation {
+			if pqError.Constraint == "accounts_pkey" {
+				return store.Account{}, store.ErrPIDTaken
+			}
+
 			return store.Account{}, store.ErrUsernameTaken
 		}
 
 		return store.Account{}, err
+	}
+
+	// * The next PID handed out must not be one that was given, so the
+	// * sequence is moved past it. It never moves back
+	if account.PID != 0 {
+		_, err = database.Postgres.Exec(`SELECT setval('account.pid_seq', GREATEST((SELECT last_value FROM account.pid_seq), $1))`, int64(account.PID))
+		if err != nil {
+			return store.Account{}, err
+		}
 	}
 
 	return Store{}.GetAccountByPID(uint32(pid))

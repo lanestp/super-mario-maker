@@ -54,6 +54,7 @@ func Run(t *testing.T, backend Backend) {
 		{"EventCourseMetadata", testEventCourseMetadata},
 		{"Accounts", testAccounts},
 		{"AccountTokens", testAccountTokens},
+		{"AccountsWithAGivenPID", testAccountsWithAGivenPID},
 	}
 
 	for _, test := range tests {
@@ -935,4 +936,47 @@ func testRankedAndLatestObjects(t *testing.T, s store.Store, backend Backend) {
 	check("second and third newest", latest, nexError, middle, high)
 
 	_ = notUploaded
+}
+
+// * A console signed in to another network logs in with that network's
+// * PID, so its account here is made with that PID
+func testAccountsWithAGivenPID(t *testing.T, s store.Store, _ Backend) {
+	const given = store.FirstPID + 50
+
+	console, err := s.CreateAccount(store.NewAccount{PID: given, Username: "ConsolePlayer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if console.PID != given {
+		t.Errorf("got PID %d, want the given %d", console.PID, given)
+	}
+
+	if found, err := s.GetAccountByPID(given); err != nil || found.Username != "ConsolePlayer" || len(found.NEXPassword) != 16 {
+		t.Errorf("the account read back as %+v (%v)", found, err)
+	}
+
+	if _, err := s.CreateAccount(store.NewAccount{PID: given, Username: "SomeoneElse"}); !errors.Is(err, store.ErrPIDTaken) {
+		t.Errorf("a second account with the same PID gave %v, want ErrPIDTaken", err)
+	}
+
+	if _, err := s.CreateAccount(store.NewAccount{PID: given + 1, Username: "consoleplayer"}); !errors.Is(err, store.ErrUsernameTaken) {
+		t.Errorf("a taken username with a free PID gave %v, want ErrUsernameTaken", err)
+	}
+
+	// * A PID below the ones handed out is fine too, and changes nothing after
+	low, err := s.CreateAccount(store.NewAccount{PID: 1700000000, Username: "LowPID"})
+	if err != nil || low.PID != 1700000000 {
+		t.Fatalf("got PID %d (%v), want 1700000000", low.PID, err)
+	}
+
+	// * Accounts made without a PID never get one that was given
+	next, err := s.CreateAccount(store.NewAccount{Username: "NextPlayer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if next.PID <= given {
+		t.Errorf("an account made after PID %d was given got %d, want a higher one", given, next.PID)
+	}
 }

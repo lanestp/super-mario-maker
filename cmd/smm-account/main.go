@@ -5,6 +5,7 @@
 //	smm-account password <username>
 //	smm-account show <username>
 //	smm-account cemu <username> <path to account.dat>
+//	smm-account console <username> <PID>
 //
 // The password is read from the SMM_ACCOUNT_PASSWORD environment
 // variable, or asked for if that is not set
@@ -16,8 +17,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"github.com/PretendoNetwork/nex-go/v2/types"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/accounts"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
@@ -34,7 +37,13 @@ const usage = `usage:
   smm-account cemu <username> <account.dat>
                                     make Cemu log in as an account, by writing or
                                     updating a Cemu account.dat file. Cemu keeps it at
-                                    mlc01/usr/save/system/act/80000001/account.dat`
+                                    mlc01/usr/save/system/act/80000001/account.dat
+  smm-account console <username> <PID>
+                                    create an account for a Wii U that stays signed in
+                                    to another network, such as Pretendo, and only plays
+                                    this game here. PID is the console's player ID on
+                                    that network. The account has no password, and
+                                    prints what the console's plugin needs`
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -55,7 +64,7 @@ func run(args []string) error {
 		if len(args) != 2 {
 			return errors.New(usage)
 		}
-	case "cemu":
+	case "cemu", "console":
 		if len(args) != 3 {
 			return errors.New(usage)
 		}
@@ -80,6 +89,8 @@ func run(args []string) error {
 		return create(opened, username)
 	case "password":
 		return changePassword(opened, username)
+	case "console":
+		return createConsoleAccount(opened, username, args[2])
 	case "cemu":
 		return writeCemuAccountFile(opened, username, args[2])
 	default:
@@ -193,6 +204,47 @@ func writeCemuAccountFile(accountStore store.AccountStore, username, path string
 	} else {
 		fmt.Printf("Updated %s to log in as account %s\n", path, account.Username)
 	}
+
+	return nil
+}
+
+// * Makes the account a console signed in to another network logs in to
+// * the game server with. It has that network's PID, and no password, as
+// * it never logs in to the account API. Prints the PID and NEX password
+// * as key=value lines, for the console's plugin
+func createConsoleAccount(opened store.Store, username, pidText string) error {
+	pid, err := strconv.ParseUint(pidText, 10, 32)
+	if err != nil || pid == 0 {
+		return fmt.Errorf("%q is not a player ID", pidText)
+	}
+
+	if err := accounts.ValidUsername(username); err != nil {
+		return err
+	}
+
+	// * Courses made by an earlier player with the same PID, such as one
+	// * loaded from an archive, would become this player's
+	owned, nexError := opened.GetUserCourseObjectIDs(types.PID(pid))
+	if nexError != nil {
+		return nexError
+	}
+
+	if len(owned) > 0 {
+		return fmt.Errorf("PID %d already owns %d courses on this server, so it can not be given to a new player", pid, len(owned))
+	}
+
+	account, err := opened.CreateAccount(store.NewAccount{PID: uint32(pid), Username: username, MiiName: username})
+	if errors.Is(err, store.ErrPIDTaken) {
+		return fmt.Errorf("an account with PID %d already exists", pid)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Created account %s for the console with PID %d\n", account.Username, account.PID)
+	fmt.Printf("pid=%d\n", account.PID)
+	fmt.Printf("nex_password=%s\n", account.NEXPassword)
 
 	return nil
 }

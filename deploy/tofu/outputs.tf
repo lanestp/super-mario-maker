@@ -27,3 +27,8 @@ output "connect_command" {
   description = "Opens a shell on the instance"
   value       = "aws ssm start-session --region ${var.region} --target ${aws_instance.server.id}"
 }
+
+output "game_server_port" {
+  description = "UDP port games log in to the game server on"
+  value       = var.authentication_port
+}

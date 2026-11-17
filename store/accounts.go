@@ -35,8 +35,18 @@ type Account struct {
 	CreatedAt time.Time
 }
 
+// ErrPIDTaken is returned when creating an account with a PID another
+// account already has
+var ErrPIDTaken = errors.New("PID is already taken")
+
 // NewAccount is the information needed to create an account
 type NewAccount struct {
+	// PID, when not 0, is the PID the account is made with, in place of
+	// the next free one. A console signed in to another network logs in
+	// to the game server with that network's PID, so its account here has
+	// to have the same one
+	PID uint32
+
 	Username string
 	MiiName  string
 	MiiData  []byte

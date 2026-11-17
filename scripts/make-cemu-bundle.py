@@ -25,18 +25,15 @@ import hashlib
 import os
 import re
 import secrets
-import shutil
 import struct
 import subprocess
 import sys
 import tempfile
-import time
 import urllib.parse
 import urllib.request
 import zipfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TOFU = os.path.join(ROOT, "deploy", "tofu")
+from smm_server import ROOT, on_server, tofu_output
 
 # * The Mii Cemu gives a new account: 96 bytes with every part of the face
 # * set the same way. It is renamed for each player below
@@ -70,45 +67,6 @@ CLIENT_CERTIFICATES = [
 
 CERTIFICATE_FOLDER = "mlc01/sys/title/0005001b/10054000/content"
 ACCOUNT_FILE = "mlc01/usr/save/system/act/80000001/account.dat"
-
-
-def run(*command):
-	return subprocess.run(command, check=True, capture_output=True, text=True).stdout.strip()
-
-
-def tofu_output(name):
-	tool = shutil.which("tofu") or shutil.which("terraform")
-	if not tool:
-		sys.exit("Neither tofu nor terraform was found")
-	return run(tool, "-chdir=" + TOFU, "output", "-raw", name)
-
-
-def on_server(instance, region, command):
-	"""Runs a command on the server's instance and returns what it printed."""
-	command_id = run(
-		"aws", "ssm", "send-command", "--region", region, "--instance-ids", instance,
-		"--document-name", "AWS-RunShellScript", "--parameters", "commands=[%s]" % quote_for_ssm(command),
-		"--query", "Command.CommandId", "--output", "text",
-	)
-
-	for _ in range(30):
-		time.sleep(2)
-		status = run(
-			"aws", "ssm", "get-command-invocation", "--region", region, "--command-id", command_id,
-			"--instance-id", instance, "--query", "Status", "--output", "text",
-		)
-		if status in ("Success", "Failed", "Cancelled", "TimedOut"):
-			break
-
-	output = run(
-		"aws", "ssm", "get-command-invocation", "--region", region, "--command-id", command_id,
-		"--instance-id", instance, "--query", "[StandardOutputContent,StandardErrorContent]", "--output", "text",
-	)
-	return status, output
-
-
-def quote_for_ssm(command):
-	return '"' + command.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def mii_checksum(data):

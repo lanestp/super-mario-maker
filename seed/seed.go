@@ -6,8 +6,8 @@
 // course and every number are made up. Only the course files and the
 // course names inside them are real.
 //
-// Some of what a real game sends when it uploads a course has not been
-// seen yet, and is a best guess here. Each guess is marked GUESS
+// The course objects are made the way a real game was seen to make one.
+// What is still a best guess is marked GUESS
 package seed
 
 import (
@@ -31,14 +31,10 @@ const (
 	objectPeriod     = 90
 	deletePermission = 3
 
-	// * GUESS. The server treats a data type above 2 and below 50 as a
-	// * course. Which one a game sends is not known
-	courseDataType = 6
-	// * GUESS. How many rating slots a game asks for on a course
+	// * What a real game sent for a course it uploaded to a test server
+	courseDataType    = 9
+	courseFlag        = 3840
 	courseRatingSlots = 7
-	// * GUESS. A game may send a meta binary, tags and extra data with a
-	// * course. None are stored
-	// *
 	// * A course is not kept in one of its maker's numbered slots
 	noPersistenceSlot = 65535
 
@@ -57,6 +53,12 @@ const (
 	nameOffset = 0x28
 	nameLength = 66
 )
+
+// * The extra data a real game sent with a course. It looks like the
+// * console, a version, the region and three unused values
+func courseExtraData() types.List[types.String] {
+	return types.List[types.String]{"WUP", "2", "USA", "0", "", ""}
+}
 
 // Stats are the numbers shown for a course
 type Stats struct {
@@ -203,17 +205,19 @@ func (s *Seeder) finishObject(dataID uint64, ratingSlots int) error {
 // given numbers, and returns its DataID. The file must be one a game
 // could have uploaded
 func (s *Seeder) Course(file []byte, owner types.PID, stats Stats) (uint64, error) {
-	course, err := coursefile.Unpack(file)
+	metaBinary, err := coursefile.MetaBinary(file)
 	if err != nil {
 		return 0, err
 	}
 
 	param := datastore_types.NewDataStorePreparePostParam()
 	param.Size = types.UInt32(len(file))
-	param.Name = types.NewString(CourseName(course))
+	// * A game sends no name, as the name is in the file
 	param.DataType = courseDataType
+	param.MetaBinary = types.NewQBuffer(metaBinary)
 	param.DelPermission.Permission = deletePermission
-	param.Flag = objectFlag
+	param.Flag = courseFlag
+	param.ExtraData = courseExtraData()
 	param.Period = objectPeriod
 	param.PersistenceInitParam.PersistenceSlotID = noPersistenceSlot
 

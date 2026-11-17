@@ -3,8 +3,11 @@ package coursefile
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"math/rand/v2"
+	"slices"
 	"testing"
 
 	"github.com/PretendoNetwork/super-mario-maker/ash0"
@@ -187,5 +190,67 @@ func TestFromZipRefusesAZipThatIsNotACourse(t *testing.T) {
 
 	if _, err := FromZip([]byte("not a zip")); !errors.Is(err, ErrNotACourseFile) {
 		t.Errorf("not a zip: got %v, want ErrNotACourseFile", err)
+	}
+}
+
+func TestMetaBinaryHoldsTheSizeOfEachCompressedPart(t *testing.T) {
+	course := testCourse()
+
+	file, err := course.Pack()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	meta, err := MetaBinary(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(meta) != MetaBinarySize {
+		t.Fatalf("meta binary is %d bytes, want %d", len(meta), MetaBinarySize)
+	}
+
+	compressedSize := func(part []byte) uint32 {
+		compressed, err := ash0.Compress(part)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return uint32(len(compressed))
+	}
+
+	// * The order a real game was seen to use, which is not the order of the file
+	want := []uint32{3, 1, compressedSize(course.MainArea), compressedSize(course.SubArea), compressedSize(course.Preview), compressedSize(course.Thumbnail), 2}
+
+	for i, number := range want {
+		if got := binary.BigEndian.Uint32(meta[i*4:]); got != number {
+			t.Errorf("number %d is %d, want %d", i, got, number)
+		}
+	}
+}
+
+// * The meta binary a real game stored, for a course file whose parts
+// * were 15128, 1132, 168 and 12672 bytes
+func TestMetaBinaryMatchesWhatARealGameStored(t *testing.T) {
+	stored, _ := hex.DecodeString("00000003000000010000046C000000A800003B180000318000000002DE09CE19A5B33B7FA4AC03BF3A332E54")
+
+	numbers := make([]uint32, 7)
+	for i := range numbers {
+		numbers[i] = binary.BigEndian.Uint32(stored[i*4:])
+	}
+
+	// * main area, sub area, preview picture, small picture
+	if want := []uint32{3, 1, 1132, 168, 15128, 12672, 2}; !slices.Equal(numbers, want) {
+		t.Fatalf("the stored meta binary reads as %v, want %v", numbers, want)
+	}
+
+	if len(stored) != MetaBinarySize {
+		t.Errorf("a real meta binary is %d bytes, but MetaBinarySize is %d", len(stored), MetaBinarySize)
+	}
+}
+
+func TestMetaBinaryRefusesWhatIsNotACourseFile(t *testing.T) {
+	if _, err := MetaBinary([]byte("not a course")); !errors.Is(err, ErrNotACourseFile) {
+		t.Errorf("got %v, want ErrNotACourseFile", err)
 	}
 }

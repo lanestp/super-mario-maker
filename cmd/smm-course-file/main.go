@@ -3,6 +3,7 @@
 //
 //	smm-course-file pack <course.zip> <course.bin>
 //	smm-course-file check <course.bin>
+//	smm-course-file meta <course.bin>   prints the meta binary a game stores with the file
 package main
 
 import (
@@ -57,7 +58,21 @@ func run(arguments []string) error {
 		fmt.Println("a course file with all four parts")
 
 		return nil
+	case len(arguments) == 2 && arguments[0] == "meta":
+		file, err := os.ReadFile(arguments[1])
+		if err != nil {
+			return err
+		}
+
+		meta, err := coursefile.MetaBinary(file)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%x\n", meta)
+
+		return nil
 	default:
-		return fmt.Errorf("usage: smm-course-file pack <course.zip> <course.bin> | smm-course-file check <course.bin>")
+		return fmt.Errorf("usage: smm-course-file pack <course.zip> <course.bin> | check <course.bin> | meta <course.bin>")
 	}
 }

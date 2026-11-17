@@ -11,6 +11,7 @@ package coursefile
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -70,8 +71,8 @@ func (c *Course) Pack() ([]byte, error) {
 	return file, nil
 }
 
-// Unpack reads the file a game uploaded for a course
-func Unpack(file []byte) (*Course, error) {
+// * Finds where each part starts, followed by where the file ends
+func partStarts(file []byte) ([]int, error) {
 	// * A part does not say how long it is compressed, so the parts are
 	// * found by their headers. Each part is a whole number of 4 byte words
 	var starts []int
@@ -86,7 +87,51 @@ func Unpack(file []byte) (*Course, error) {
 		return nil, fmt.Errorf("%w: found %d parts, want %d", ErrNotACourseFile, len(starts), partCount)
 	}
 
-	starts = append(starts, len(file))
+	return append(starts, len(file)), nil
+}
+
+// MetaBinarySize is the size of the meta binary a game stores with a course
+const MetaBinarySize = 44
+
+// MetaBinary returns the meta binary a game stores on the server with a
+// course file. The game reads it before the file, to know how long each
+// compressed part is. A course stored without it loads with nothing in it.
+//
+// The layout was read from a course uploaded by a real game: eleven big
+// endian 32 bit numbers, which are 3, 1, the sizes of the compressed main
+// area, sub area, preview picture and small picture, 2, and 16 bytes that
+// look like a checksum.
+//
+// GUESS. What the 16 bytes are a checksum of is not known. They are left
+// as zeros here. The meaning of the numbers 3, 1 and 2 is not known
+// either, and they are copied as they were seen
+func MetaBinary(file []byte) ([]byte, error) {
+	if _, err := Unpack(file); err != nil {
+		return nil, err
+	}
+
+	starts, err := partStarts(file)
+	if err != nil {
+		return nil, err
+	}
+
+	size := func(part int) uint32 { return uint32(starts[part+1] - starts[part]) }
+
+	meta := make([]byte, 0, MetaBinarySize)
+	for _, number := range []uint32{3, 1, size(1), size(2), size(0), size(3), 2} {
+		meta = binary.BigEndian.AppendUint32(meta, number)
+	}
+
+	return append(meta, make([]byte, 16)...), nil
+}
+
+// Unpack reads the file a game uploaded for a course
+func Unpack(file []byte) (*Course, error) {
+	starts, err := partStarts(file)
+	if err != nil {
+		return nil, err
+	}
+
 	course := &Course{}
 
 	for i, part := range course.parts() {

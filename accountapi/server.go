@@ -44,6 +44,37 @@ type Server struct {
 	// certificate
 	Files     http.Handler
 	FilesPath string
+
+	// PlainFilesPort, when set, also serves Files on that port without
+	// TLS, and nothing else. A game checks a server it reaches over TLS
+	// for files against the console's own certificates, which an emulator
+	// without a real console's files can not do, so it can only reach
+	// files without TLS
+	PlainFilesPort int
+}
+
+func newHTTPServer(port int, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:    net.JoinHostPort("", strconv.Itoa(port)),
+		Handler: handler,
+
+		// * Stops slow or stalled clients from holding connections open
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    64 * 1024,
+	}
+}
+
+// PlainFilesHandler serves only the files, for the port without TLS.
+// Logging in is never offered there
+func (s Server) PlainFilesHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle(s.FilesPath, s.Files)
+	mux.Handle(s.FilesPath+"/", s.Files)
+
+	return mux
 }
 
 // * What a current client asks for, followed by what an old console can
@@ -137,16 +168,21 @@ func (s Server) ListenAndServe() error {
 		handler = mux
 	}
 
-	httpServer := &http.Server{
-		Addr:    net.JoinHostPort("", strconv.Itoa(s.Port)),
-		Handler: handler,
+	httpServer := newHTTPServer(s.Port, handler)
 
-		// * Stops slow or stalled clients from holding connections open
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       2 * time.Minute,
-		MaxHeaderBytes:    64 * 1024,
+	if s.PlainFilesPort != 0 && s.Files != nil && s.PlainFilesPort != s.Port {
+		plain := newHTTPServer(s.PlainFilesPort, s.PlainFilesHandler())
+		failed := make(chan error, 1)
+
+		go func() { failed <- plain.ListenAndServe() }()
+
+		// * If either port fails, the server stops, so that it is never
+		// * left half working
+		go func() {
+			if err := <-failed; err != nil {
+				httpServer.Close()
+			}
+		}()
 	}
 
 	tlsConfig, err := s.TLSConfig()

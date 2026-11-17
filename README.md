@@ -140,6 +140,7 @@ All configuration options are handled via environment variables
 | `PN_SMM_ACCOUNTS`                   | Where accounts are kept, `grpc` or `local`     | No (Defaults to `grpc`)             |
 | `PN_SMM_ACCOUNT_HTTP_PORT`          | Port to serve the account API on               | No (Not served when not set)        |
 | `PN_SMM_FILE_BASE_URL`              | How games reach this server, such as `https://smm.example.com`. When set, games upload and download course files through the server on the account API's port, and are never sent to S3 | No (Games are sent to S3)           |
+| `PN_SMM_FILE_HTTP_PORT`             | Port to also serve course files on without TLS, and nothing else. For emulators without a real console's certificate files, which can not reach files over TLS. Point `PN_SMM_FILE_BASE_URL` at it | No |
 | `PN_SMM_FILE_ROOT_CA`               | Root certificate, as a PEM or DER file, that games are told to check this server against for files. A game trusts only this, not its own list. Needed when `PN_SMM_FILE_BASE_URL` is HTTPS: for a Let's Encrypt certificate it is their root, not the server's own certificate | No |
 | `PN_SMM_FILE_URL_SECRET`            | Secret that signs the links to files           | No (A new one is made at each start) |
 | `PN_SMM_ACCOUNT_HTTP_TLS_DOMAIN`    | Name games reach this server by. A certificate for it is fetched from Let's Encrypt and kept up to date. The server must be reachable by that name on port 443 | No |

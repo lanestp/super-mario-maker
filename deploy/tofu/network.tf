@@ -101,6 +101,18 @@ resource "aws_security_group" "server" {
     cidr_blocks = local.use_tls ? ["0.0.0.0/0"] : var.allowed_cidrs
   }
 
+  dynamic "ingress" {
+    for_each = local.plain_files ? [80] : []
+
+    content {
+      description = "Course files without TLS"
+      protocol    = "tcp"
+      from_port   = ingress.value
+      to_port     = ingress.value
+      cidr_blocks = var.allowed_cidrs
+    }
+  }
+
   egress {
     description = "Anywhere, to reach S3, the image registry and updates"
     protocol    = "-1"
@@ -128,6 +140,9 @@ resource "aws_eip_association" "server" {
 # With a domain, the server is given a name and serves TLS on port 443
 
 locals {
+  plain_files = var.domain_name != null && var.files_without_tls
+  files_url   = local.plain_files ? "http://${var.domain_name}" : local.base_url
+
   use_tls   = var.domain_name != null
   http_port = local.use_tls ? 443 : var.account_http_port
   base_url  = local.use_tls ? "https://${var.domain_name}" : "http://${aws_eip.server.public_ip}:${var.account_http_port}"

@@ -297,6 +297,16 @@ func configureFileProxy() {
 	globals.AccountAPI.Files = proxy.Handler()
 	globals.AccountAPI.FilesPath = fileproxy.Path
 
+	if plainPort := strings.TrimSpace(os.Getenv("PN_SMM_FILE_HTTP_PORT")); plainPort != "" {
+		port, err := strconv.Atoi(plainPort)
+		if err != nil || port < 1 || port > 65535 {
+			globals.Logger.Errorf("PN_SMM_FILE_HTTP_PORT is not a valid port. Expected 1-65535, got %s", plainPort)
+			os.Exit(1)
+		}
+
+		globals.AccountAPI.PlainFilesPort = port
+	}
+
 	globals.Logger.Infof("Games upload and download files through this server, at %s", parsed.JoinPath(fileproxy.Path))
 }
 

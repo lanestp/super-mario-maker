@@ -89,8 +89,10 @@ locals {
     PN_SMM_CONFIG_S3_KEY_BASE         = var.s3_key_base
     # Games upload and download course files through the server. Nothing
     # outside the instance is ever given a link to the bucket
-    PN_SMM_FILE_BASE_URL = local.base_url
+    PN_SMM_FILE_BASE_URL = local.files_url
   }
+
+  plain_files_environment = local.plain_files ? { PN_SMM_FILE_HTTP_PORT = 80 } : {}
 
   tls_environment = local.use_tls ? {
     PN_SMM_ACCOUNT_HTTP_TLS_DOMAIN = var.domain_name
@@ -124,7 +126,7 @@ resource "aws_instance" "server" {
     registry     = split("/", aws_ecr_repository.server.repository_url)[0]
     image        = local.image
     data_volume  = replace(aws_ebs_volume.data.id, "-", "")
-    environment  = merge(local.server_environment, local.tls_environment)
+    environment  = merge(local.server_environment, local.tls_environment, local.plain_files_environment)
     service_name = var.name
     root_ca      = file("${path.module}/${var.root_ca_file}")
   })

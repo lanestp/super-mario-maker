@@ -49,6 +49,7 @@ sudo docker exec -it smm ./smm-account create <username>
 | `allowed_cidrs`           | Networks that may reach the server                  | none, required |
 | `region`                  | AWS region                                          | `us-east-1` |
 | `domain_name`             | Name to serve under over TLS, in a Route 53 zone of the account | plain HTTP |
+| `files_without_tls`       | Serve course files over plain HTTP on port 80, for emulators | `true`      |
 | `legacy_tls`              | Also accept TLS 1.0 and 1.1, for a Wii U            | `true`      |
 | `subnet_id`               | A public subnet to use, when the account has no room for another network | a network is made |
 | `name`                    | Name given to everything that is made               | `smm`       |

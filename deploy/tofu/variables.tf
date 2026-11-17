@@ -37,6 +37,17 @@ variable "legacy_tls" {
   default     = true
 }
 
+variable "files_without_tls" {
+  description = <<-EOT
+    Serve course files over plain HTTP on port 80, and logins over TLS.
+    Needed for emulators without a real console's certificate files, which
+    can not reach files over TLS at all. Turn off when only real consoles
+    connect. Only used with domain_name
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "root_ca_file" {
   description = <<-EOT
     Root certificate games are told to check the server against, as a file

@@ -2,6 +2,7 @@ package ash0
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"math/rand/v2"
 	"testing"
@@ -86,6 +87,33 @@ func TestCompressMakesRepetitiveDataSmaller(t *testing.T) {
 
 		if len(compressed) > most {
 			t.Errorf("%s: %d bytes became %d, want at most %d", name, len(inputs[name]), len(compressed), most)
+		}
+	}
+}
+
+// * The game finds the next part of a course file right after the last
+// * word a part uses, so a stream must not be followed by spare words
+func TestCompressLeavesNothingAfterTheLastWordUsed(t *testing.T) {
+	for name, input := range testInputs() {
+		compressed, err := Compress(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// * With the last word of either stream taken away, the data must
+		// * no longer be all there
+		distanceOffset := int(binary.BigEndian.Uint32(compressed[8:12]))
+
+		withoutLastSymbolWord := append(bytes.Clone(compressed[:distanceOffset-4]), compressed[distanceOffset:]...)
+		binary.BigEndian.PutUint32(withoutLastSymbolWord[8:12], uint32(distanceOffset-4))
+
+		for which, shortened := range map[string][]byte{
+			"symbol":   withoutLastSymbolWord,
+			"distance": compressed[:len(compressed)-4],
+		} {
+			if output, err := Decompress(shortened); err == nil && bytes.Equal(output, input) {
+				t.Errorf("%s: the %s stream ends with a word that is not needed", name, which)
+			}
 		}
 	}
 }

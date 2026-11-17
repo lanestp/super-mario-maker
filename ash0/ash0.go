@@ -487,14 +487,16 @@ func (w *bitWriter) writeCode(c code) {
 	w.writeBits(c.bits, c.length)
 }
 
-// * Ends the stream on a whole word, followed by one empty word. The
-// * console's reader loads the next word as soon as it has used the last
-// * bit of one, so it reads one word past the last bit it needs
+// * Ends the stream on a whole word, with nothing after it. Files made
+// * by the game end each stream on the last word that holds any bits, and
+// * the game finds the next part of a course file right after the end of
+// * the one before, so a spare word here makes it lose the parts that
+// * follow. A course packed with one loaded in the game with no blocks
 func (w *bitWriter) finish() []byte {
 	if w.used > 0 {
 		w.data = binary.BigEndian.AppendUint32(w.data, w.current<<(32-w.used))
 		w.current, w.used = 0, 0
 	}
 
-	return binary.BigEndian.AppendUint32(w.data, 0)
+	return w.data
 }

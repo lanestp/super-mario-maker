@@ -1,0 +1,11 @@
+# Kept out of the image build: local data, build output and tooling
+.git
+build
+local-data
+log
+deploy
+e2e/client/.venv
+**/__pycache__
+*.db
+*.db-shm
+*.db-wal

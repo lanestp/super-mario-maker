@@ -1,0 +1,66 @@
+#!/bin/bash
+# Sets up a new instance: mounts the database volume, and runs the server
+# image as a service that starts again if it stops
+set -euo pipefail
+
+dnf install -y docker
+systemctl enable --now docker
+
+# The database volume is attached after the instance starts, so wait for it
+device=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${data_volume}
+for _ in $(seq 1 120); do
+	[ -e "$device" ] && break
+	sleep 2
+done
+
+if [ ! -e "$device" ]; then
+	echo "the database volume did not appear" >&2
+	exit 1
+fi
+
+# Only a volume with nothing on it is formatted, so that a volume carried
+# over from an earlier instance keeps its database
+if ! blkid "$device" >/dev/null 2>&1; then
+	mkfs.ext4 -L smm-data "$device"
+fi
+
+mkdir -p /data
+echo "LABEL=smm-data /data ext4 defaults,nofail 0 2" >> /etc/fstab
+mount /data
+
+# The server runs as the first user of its image
+chown 1000:1000 /data
+
+mkdir -p /etc/${service_name}
+umask 077
+cat > /etc/${service_name}/environment <<'ENVIRONMENT'
+%{ for key, value in environment ~}
+${key}=${value}
+%{ endfor ~}
+ENVIRONMENT
+umask 022
+
+cat > /etc/systemd/system/${service_name}.service <<'UNIT'
+[Unit]
+Description=Super Mario Maker server
+After=docker.service network-online.target
+Requires=docker.service
+RequiresMountsFor=/data
+
+[Service]
+# Until an image has been pushed to the registry the pull fails, and the
+# service tries again every 30 seconds
+ExecStartPre=/bin/sh -c 'aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${registry}'
+ExecStartPre=/usr/bin/docker pull ${image}
+ExecStartPre=-/usr/bin/docker rm -f ${service_name}
+ExecStart=/usr/bin/docker run --rm --name ${service_name} --network host --log-opt max-size=10m --log-opt max-file=3 --env-file /etc/${service_name}/environment -v /data:/data ${image}
+ExecStop=/usr/bin/docker stop ${service_name}
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now ${service_name}.service

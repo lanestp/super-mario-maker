@@ -26,14 +26,12 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strconv"
 
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 	"github.com/PretendoNetwork/super-mario-maker/seed"
 	"github.com/PretendoNetwork/super-mario-maker/store/open"
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 const seededListName = "seeded.json"
@@ -168,16 +166,7 @@ func filePutter() (func(key string, data []byte) error, error) {
 		return nil, errors.New("PN_SMM_CONFIG_S3_BUCKET environment variable not set")
 	}
 
-	// * As in the server, anything but a clear "false" means TLS
-	secure, err := strconv.ParseBool(os.Getenv("PN_SMM_CONFIG_S3_SECURE"))
-	if err != nil {
-		secure = true
-	}
-
-	client, err := minio.New(os.Getenv("PN_SMM_CONFIG_S3_ENDPOINT"), &minio.Options{
-		Creds:  credentials.NewStaticV4(os.Getenv("PN_SMM_CONFIG_S3_ACCESS_KEY"), os.Getenv("PN_SMM_CONFIG_S3_ACCESS_SECRET"), ""),
-		Secure: secure,
-	})
+	client, _, err := globals.S3ClientFromEnv()
 	if err != nil {
 		return nil, err
 	}

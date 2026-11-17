@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and fill in
+
+# Networks that may reach the server. Find your own address with:
+#   curl -s https://checkip.amazonaws.com
+allowed_cidrs = ["203.0.113.7/32"]
+
+# region        = "us-east-1"
+# instance_type = "t4g.micro"

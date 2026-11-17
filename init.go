@@ -17,8 +17,6 @@ import (
 
 	"github.com/PretendoNetwork/nex-go/v2"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -33,11 +31,6 @@ func init() {
 	if err != nil {
 		globals.Logger.Warning("Error loading .env file")
 	}
-
-	s3Endpoint := os.Getenv("PN_SMM_CONFIG_S3_ENDPOINT")
-	s3AccessKey := os.Getenv("PN_SMM_CONFIG_S3_ACCESS_KEY")
-	s3AccessSecret := os.Getenv("PN_SMM_CONFIG_S3_ACCESS_SECRET")
-	s3SecureEnv := os.Getenv("PN_SMM_CONFIG_S3_SECURE")
 
 	authenticationServerPort := os.Getenv("PN_SMM_AUTHENTICATION_SERVER_PORT")
 	secureServerHost := os.Getenv("PN_SMM_SECURE_SERVER_HOST")
@@ -155,20 +148,13 @@ func init() {
 		)
 	}
 
-	staticCredentials := credentials.NewStaticV4(s3AccessKey, s3AccessSecret, "")
-
-	s3Secure, err := strconv.ParseBool(s3SecureEnv)
-	if err != nil {
-		globals.Logger.Warningf("PN_SMM_CONFIG_S3_SECURE environment variable not set. Using default value: %t", true)
-		s3Secure = true
-	}
-
-	minIOClient, err := minio.New(s3Endpoint, &minio.Options{
-		Creds:  staticCredentials,
-		Secure: s3Secure,
-	})
+	minIOClient, s3SecureWasSet, err := globals.S3ClientFromEnv()
 	if err != nil {
 		panic(err)
+	}
+
+	if !s3SecureWasSet {
+		globals.Logger.Warningf("PN_SMM_CONFIG_S3_SECURE environment variable not set. Using default value: %t", true)
 	}
 
 	globals.MinIOClient = minIOClient

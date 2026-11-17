@@ -31,3 +31,12 @@ log
 e2e/client/.venv
 __pycache__
 local-data
+
+# Deployment: local state, settings and provider downloads
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+# Written by whichever of OpenTofu or Terraform ran last, and they use
+# different registries, so it is not shared
+.terraform.lock.hcl

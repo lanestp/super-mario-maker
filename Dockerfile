@@ -17,7 +17,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 COPY . .
 ARG BUILD_STRING=pretendo.supermariomaker.docker
 RUN --mount=type=cache,target=/go/pkg/mod/ \
-	CGO_ENABLED=0 go build -ldflags "-X 'main.serverBuildString=${BUILD_STRING}'" -v -o ${app_dir}/build/server
+	CGO_ENABLED=0 go build -ldflags "-X 'main.serverBuildString=${BUILD_STRING}'" -v -o ${app_dir}/build/server && \
+	CGO_ENABLED=0 go build -v -o ${app_dir}/build/smm-account ./cmd/smm-account
 
 
 # * Running the final application
@@ -32,5 +33,8 @@ RUN mkdir -p ${app_dir}/log && chown go:go ${app_dir}/log
 USER go
 
 COPY --from=build ${app_dir}/build/server ${app_dir}/server
+# * For making accounts on a server which keeps its own, with
+# * docker exec -it <container> ./smm-account create <username>
+COPY --from=build ${app_dir}/build/smm-account ${app_dir}/smm-account
 
 CMD [ "./server" ]

@@ -90,7 +90,9 @@ and put this in `network_services.xml` in Cemu's folder, then choose the custom 
 </content>
 ```
 
-Cemu also wants `otp.bin`, `seeprom.bin` and the certificate files of a Wii U before it will go online, and a copy of the game. This has not been tried with Cemu and the game yet, only with the client in `e2e`
+Cemu also wants `otp.bin`, `seeprom.bin` and the certificate files of a Wii U before it will go online, and a copy of the game. Course World, playing and uploading courses, and 100 Mario have been tried this way with the game in Cemu. Mii faces are not drawn without the Mii files of a Wii U, and Miiverse is not served, so an upload ends with error 115-1101 after the course itself has been stored
+
+See [deploy/tofu](deploy/tofu) for running the server on AWS
 
 ## Testing
 
@@ -127,8 +129,9 @@ All configuration options are handled via environment variables
 | `PN_SMM_SECURE_SERVER_HOST`         | Host name for the secure server                | Yes                                 |
 | `PN_SMM_SECURE_SERVER_PORT`         | Port for the secure server                     | Yes                                 |
 | `PN_SMM_CONFIG_S3_ENDPOINT`         | S3 server endpoint                             | Yes                                 |
-| `PN_SMM_CONFIG_S3_ACCESS_KEY`       | S3 access key ID                               | Yes                                 |
-| `PN_SMM_CONFIG_S3_ACCESS_SECRET`    | S3 secret                                      | Yes                                 |
+| `PN_SMM_CONFIG_S3_ACCESS_KEY`       | S3 access key ID                               | No (Uses the machine's role, as on EC2) |
+| `PN_SMM_CONFIG_S3_ACCESS_SECRET`    | S3 secret                                      | Yes, with an access key             |
+| `PN_SMM_CONFIG_S3_REGION`           | Region of the S3 bucket                        | No (Looked up from the bucket)      |
 | `PN_SMM_CONFIG_S3_SECURE`           | Whether to connect to the S3 server over HTTPS | No (Defaults to `true`)             |
 | `PN_SMM_CONFIG_S3_BUCKET`           | S3 bucket                                      | Yes                                 |
 | `PN_SMM_CONFIG_S3_KEY_BASE`         | S3 Key prefix                                  | Yes                                 |

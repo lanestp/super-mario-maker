@@ -123,6 +123,28 @@ func CreateTables() {
 	// * Real server does not allow duplicate buffers in a given slot for an object,
 	// * even if uploaded by different users. We could change this, but I don't see
 	// * much point
+	_, err = Postgres.Exec(`CREATE TABLE IF NOT EXISTS datastore.import_cursors (
+		name text PRIMARY KEY,
+		position bigint NOT NULL
+	)`)
+	if err != nil {
+		globals.Logger.Critical(err.Error())
+		os.Exit(0)
+	}
+
+	_, err = Postgres.Exec(`CREATE TABLE IF NOT EXISTS datastore.import_attempts (
+		data_id bigint PRIMARY KEY,
+		outcome text NOT NULL,
+		detail text NOT NULL,
+		entry bytea NOT NULL,
+		tries int NOT NULL,
+		last_tried timestamp NOT NULL
+	)`)
+	if err != nil {
+		globals.Logger.Critical(err.Error())
+		os.Exit(0)
+	}
+
 	_, err = Postgres.Exec(`CREATE TABLE IF NOT EXISTS datastore.buffer_queues (
 		data_id bigint,
 		slot int,

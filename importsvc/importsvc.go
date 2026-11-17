@@ -19,10 +19,34 @@ import (
 
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	"github.com/PretendoNetwork/super-mario-maker/seed"
+	"github.com/PretendoNetwork/super-mario-maker/store"
 )
 
-// Path is where the service is served
+// Path is where courses are sent
 const Path = "/v1/import/courses"
+
+// CursorsPath is where how far a run through an archive has got is kept
+const CursorsPath = "/v1/import/cursors"
+
+// Cursor is how far a run has got
+type Cursor struct {
+	Position int64 `json:"position"`
+}
+
+// AttemptsPath is where courses that were not brought in are kept track of
+const AttemptsPath = "/v1/import/attempts"
+
+// Attempt is a course that was not brought in, as sent to and from the
+// service. Outcome is one of store.ImportFailed, store.ImportNotArchived
+// and store.ImportRefused
+type Attempt struct {
+	DataID    uint64          `json:"data_id"`
+	Outcome   string          `json:"outcome"`
+	Detail    string          `json:"detail"`
+	Entry     json.RawMessage `json:"entry"`
+	Tries     int             `json:"tries,omitempty"`
+	LastTried time.Time       `json:"last_tried,omitempty"`
+}
 
 // * The largest course file taken. Course files are tens of kilobytes
 const maxFileBytes = 1 << 20
@@ -81,6 +105,10 @@ func Handler(config Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+Path+"/{id}", s.exists)
 	mux.HandleFunc("POST "+Path, s.importCourse)
+	mux.HandleFunc("POST "+AttemptsPath, s.recordAttempt)
+	mux.HandleFunc("GET "+AttemptsPath, s.attemptsToRetry)
+	mux.HandleFunc("GET "+CursorsPath+"/{name}", s.cursor)
+	mux.HandleFunc("PUT "+CursorsPath+"/{name}", s.setCursor)
 
 	return s.authorized(mux), nil
 }
@@ -168,6 +196,13 @@ func (s *service) importCourse(w http.ResponseWriter, r *http.Request) {
 
 	err = s.config.Seeder.ImportCourse(archived)
 
+	// * A course that is here needs no more tries
+	if err == nil || errors.Is(err, seed.ErrAlreadyImported) {
+		if forgetErr := s.config.Seeder.Store.ForgetImportAttempt(course.DataID); forgetErr != nil {
+			s.config.LogError(fmt.Errorf("forgetting the attempts at course %d: %w", course.DataID, forgetErr))
+		}
+	}
+
 	switch {
 	case err == nil:
 		w.WriteHeader(http.StatusCreated)
@@ -179,4 +214,112 @@ func (s *service) importCourse(w http.ResponseWriter, r *http.Request) {
 		s.config.LogError(fmt.Errorf("importing course %d: %w", course.DataID, err))
 		http.Error(w, "the course could not be stored", http.StatusInternalServerError)
 	}
+}
+
+func (s *service) recordAttempt(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+
+	var attempt Attempt
+	if err := json.NewDecoder(r.Body).Decode(&attempt); err != nil {
+		http.Error(w, "the attempt is not valid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	switch attempt.Outcome {
+	case store.ImportFailed, store.ImportNotArchived, store.ImportRefused:
+	default:
+		http.Error(w, "the outcome must be failed, not_archived or refused", http.StatusBadRequest)
+		return
+	}
+
+	if attempt.DataID == 0 {
+		http.Error(w, "the attempt has no DataID", http.StatusBadRequest)
+		return
+	}
+
+	err := s.config.Seeder.Store.RecordImportAttempt(store.ImportAttempt{
+		DataID:  attempt.DataID,
+		Outcome: attempt.Outcome,
+		Detail:  attempt.Detail,
+		Entry:   attempt.Entry,
+	})
+	if err != nil {
+		s.config.LogError(fmt.Errorf("recording an attempt at course %d: %w", attempt.DataID, err))
+		http.Error(w, "the attempt could not be recorded", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// * Lists courses to try again: those with any of the outcome
+// * parameters, tried fewer than max_tries times, at most limit of them
+func (s *service) attemptsToRetry(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	maxTries, err := strconv.Atoi(query.Get("max_tries"))
+	if err != nil || maxTries < 1 {
+		maxTries = 3
+	}
+
+	limit, err := strconv.Atoi(query.Get("limit"))
+	if err != nil || limit < 1 || limit > 10000 {
+		limit = 100
+	}
+
+	found, err := s.config.Seeder.Store.ImportAttemptsToRetry(query["outcome"], maxTries, limit)
+	if err != nil {
+		s.config.LogError(fmt.Errorf("listing attempts: %w", err))
+		http.Error(w, "the attempts could not be listed", http.StatusInternalServerError)
+
+		return
+	}
+
+	attempts := make([]Attempt, 0, len(found))
+	for _, attempt := range found {
+		attempts = append(attempts, Attempt{
+			DataID:    attempt.DataID,
+			Outcome:   attempt.Outcome,
+			Detail:    attempt.Detail,
+			Entry:     json.RawMessage(attempt.Entry),
+			Tries:     attempt.Tries,
+			LastTried: attempt.LastTried,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(attempts)
+}
+
+func (s *service) cursor(w http.ResponseWriter, r *http.Request) {
+	position, err := s.config.Seeder.Store.ImportCursor(r.PathValue("name"))
+	if err != nil {
+		s.config.LogError(fmt.Errorf("reading cursor %q: %w", r.PathValue("name"), err))
+		http.Error(w, "the cursor could not be read", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(Cursor{Position: position})
+}
+
+func (s *service) setCursor(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+
+	var cursor Cursor
+	if err := json.NewDecoder(r.Body).Decode(&cursor); err != nil || cursor.Position < 0 {
+		http.Error(w, "the cursor must be a position of 0 or more", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.config.Seeder.Store.SetImportCursor(r.PathValue("name"), cursor.Position); err != nil {
+		s.config.LogError(fmt.Errorf("saving cursor %q: %w", r.PathValue("name"), err))
+		http.Error(w, "the cursor could not be saved", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

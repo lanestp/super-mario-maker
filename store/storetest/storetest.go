@@ -52,6 +52,8 @@ func Run(t *testing.T, backend Backend) {
 		{"RandomCoursesSkipUnavailable", testRandomCoursesSkipUnavailable},
 		{"RandomCoursesByFailureRate", testRandomCoursesByFailureRate},
 		{"ImportObject", testImportObject},
+		{"ImportAttempts", testImportAttempts},
+		{"ImportCursors", testImportCursors},
 		{"UnderReview", testUnderReview},
 		{"EventCourseMetadata", testEventCourseMetadata},
 		{"Accounts", testAccounts},
@@ -1105,5 +1107,79 @@ func testImportObject(t *testing.T, s store.Store, _ Backend) {
 
 	if err := s.ImportObject(store.ImportedDataIDLimit, 1, param, created); err == nil || errors.Is(err, store.ErrObjectExists) {
 		t.Errorf("a DataID in the server's own range gave %v, want it refused", err)
+	}
+}
+
+func testImportAttempts(t *testing.T, s store.Store, _ Backend) {
+	record := func(dataID uint64, outcome string) {
+		t.Helper()
+
+		if err := s.RecordImportAttempt(store.ImportAttempt{DataID: dataID, Outcome: outcome, Detail: "why " + outcome, Entry: []byte(`{"levelid":1}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	record(1, store.ImportFailed)
+	record(2, store.ImportNotArchived)
+	record(3, store.ImportRefused)
+	record(1, store.ImportFailed)
+
+	attempts, err := s.ImportAttemptsToRetry([]string{store.ImportFailed, store.ImportNotArchived}, 5, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(attempts) != 2 {
+		t.Fatalf("got %d attempts to retry, want the failed and the not archived ones: %+v", len(attempts), attempts)
+	}
+
+	tries := map[uint64]int{}
+	for _, attempt := range attempts {
+		tries[attempt.DataID] = attempt.Tries
+
+		if string(attempt.Entry) != `{"levelid":1}` || attempt.Detail == "" || attempt.LastTried.IsZero() {
+			t.Errorf("attempt %d read back as %+v", attempt.DataID, attempt)
+		}
+	}
+
+	if tries[1] != 2 || tries[2] != 1 {
+		t.Errorf("tries are %v, want 2 for the course tried twice and 1 for the other", tries)
+	}
+
+	// * A course that has been tried enough is left alone
+	if attempts, _ := s.ImportAttemptsToRetry([]string{store.ImportFailed}, 2, 10); len(attempts) != 0 {
+		t.Errorf("a course tried twice was listed with a limit of 2 tries: %+v", attempts)
+	}
+
+	if err := s.ForgetImportAttempt(1); err != nil {
+		t.Fatal(err)
+	}
+
+	if attempts, _ := s.ImportAttemptsToRetry([]string{store.ImportFailed, store.ImportNotArchived, store.ImportRefused}, 5, 10); len(attempts) != 2 {
+		t.Errorf("after forgetting one, %d attempts are left, want 2", len(attempts))
+	}
+}
+
+func testImportCursors(t *testing.T, s store.Store, _ Backend) {
+	if position, err := s.ImportCursor("a run"); err != nil || position != 0 {
+		t.Fatalf("a run that has not started is at %d (%v), want 0", position, err)
+	}
+
+	for _, position := range []int64{7515625, 7516625} {
+		if err := s.SetImportCursor("a run", position); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := s.SetImportCursor("another run", 42); err != nil {
+		t.Fatal(err)
+	}
+
+	if position, err := s.ImportCursor("a run"); err != nil || position != 7516625 {
+		t.Errorf("the run is at %d (%v), want the last position set", position, err)
+	}
+
+	if position, _ := s.ImportCursor("another run"); position != 42 {
+		t.Errorf("another run is at %d, want its own position", position)
 	}
 }

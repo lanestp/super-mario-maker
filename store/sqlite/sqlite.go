@@ -75,6 +75,20 @@ CREATE TABLE IF NOT EXISTS object_custom_rankings (
 	PRIMARY KEY (data_id, application_id)
 ) WITHOUT ROWID;
 
+CREATE TABLE IF NOT EXISTS import_cursors (
+	name TEXT PRIMARY KEY,
+	position INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS import_attempts (
+	data_id INTEGER PRIMARY KEY,
+	outcome TEXT NOT NULL,
+	detail TEXT NOT NULL,
+	entry BLOB NOT NULL,
+	tries INTEGER NOT NULL,
+	last_tried INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS buffer_queues (
 	data_id INTEGER NOT NULL,
 	slot INTEGER NOT NULL,

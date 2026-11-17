@@ -27,6 +27,7 @@ const FirstDataID = 940000
 // Store is the storage used by the server
 type Store interface {
 	AccountStore
+	ImportAttemptStore
 
 	// * Objects
 	InitializeObjectByPreparePostParam(ownerPID types.PID, param datastore_types.DataStorePreparePostParam) (uint64, *nex.Error)
@@ -116,3 +117,45 @@ const ImportedDataIDLimit = 1_000_000_000
 // ErrObjectExists is returned when importing an object with a DataID
 // another object already has
 var ErrObjectExists = errors.New("an object with this DataID already exists")
+
+// What happened when a course from an archive could not be brought in
+const (
+	// ImportFailed is for something that may go right another time, such
+	// as the archive not answering
+	ImportFailed = "failed"
+	// ImportNotArchived is for a course the archive has no copy of
+	ImportNotArchived = "not_archived"
+	// ImportRefused is for a course whose data can not be used. Trying
+	// again gives the same answer
+	ImportRefused = "refused"
+)
+
+// ImportAttempt is a course from an archive that has not been brought in yet
+type ImportAttempt struct {
+	DataID  uint64
+	Outcome string
+	// Detail says why, for whoever looks into it
+	Detail string
+	// Entry is what the archive's index said about the course, so that it
+	// can be tried again without the index
+	Entry     []byte
+	Tries     int
+	LastTried time.Time
+}
+
+// ImportAttemptStore keeps track of courses from an archive that have not
+// been brought in, so that they can be tried again
+type ImportAttemptStore interface {
+	// RecordImportAttempt keeps an attempt, counting the tries of a course
+	// tried before
+	RecordImportAttempt(attempt ImportAttempt) error
+	// ImportAttemptsToRetry lists the attempts with one of the outcomes and
+	// fewer than maxTries tries, the longest untried first
+	ImportAttemptsToRetry(outcomes []string, maxTries, limit int) ([]ImportAttempt, error)
+	// ForgetImportAttempt is for a course that has been brought in
+	ForgetImportAttempt(dataID uint64) error
+	// ImportCursor is how far a named run through an archive has got, so
+	// that it carries on from there. 0 when it has not started
+	ImportCursor(name string) (int64, error)
+	SetImportCursor(name string, position int64) error
+}

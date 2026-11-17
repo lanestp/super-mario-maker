@@ -1,9 +1,5 @@
-# Builds the plugin. The settings are built into it, so a copy is made
-# for each player:
-#
-#   make SMM_HOST=203.0.113.4 SMM_PORT=6004 SMM_PID=1712345678 SMM_NEX_PASSWORD=...
-#
-# Run inside the container described in Dockerfile, see the README
+# Builds the plugin. Run inside the container described in Dockerfile,
+# see the README
 
 .SUFFIXES:
 
@@ -22,10 +18,8 @@ BUILD    := build
 SOURCES  := src
 INCLUDES := src
 
-SETTINGS := -DSMM_HOST=\"$(SMM_HOST)\" -DSMM_PORT=$(SMM_PORT) -DSMM_PID=$(SMM_PID) -DSMM_NEX_PASSWORD=\"$(SMM_NEX_PASSWORD)\"
-
 CFLAGS   := -Wall -Werror -Os -ffunction-sections -fdata-sections $(MACHDEP)
-CFLAGS   += $(INCLUDE) -D__WIIU__ -D__WUT__ -D__WUPS__ $(SETTINGS)
+CFLAGS   += $(INCLUDE) -D__WIIU__ -D__WUT__ -D__WUPS__
 CXXFLAGS := $(CFLAGS) -std=c++20 -fno-exceptions -fno-rtti
 LDFLAGS   = -g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) -Wl,-gc-sections $(WUPSSPECS)
 LIBS     := -lwups -lwut

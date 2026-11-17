@@ -61,6 +61,17 @@ variable "root_ca_file" {
   default     = "certificates/lets-encrypt-root-yr.pem"
 }
 
+variable "invite_code" {
+  description = <<-EOT
+    Code players give on the join page at /join to make an account. Left
+    out, there is no join page. Kept in the state, so treat the state as
+    secret
+  EOT
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 variable "subnet_id" {
   description = <<-EOT
     A public subnet to put the server in, such as one of the account's

@@ -9,26 +9,36 @@
 // server only. Everything else, and every other game, stays where it
 // was.
 //
-// The server and the password are built into the plugin, so a copy is
-// made for each player. It only changes the answer for the player it was
-// made for, so that other people on the same console are left alone.
+// Where to send the game, and the password to log in there, are read from
+// a file on the SD card for each player, named after the player's ID on
+// the console's network:
+//
+//   sd:/wiiu/smm-private-server/<player ID>.txt
+//
+//   host=203.0.113.4
+//   port=6004
+//   password=...
+//
+// A player with no file plays Super Mario Maker as before, so other people
+// on the same console are left alone.
 
 #include <wups.h>
 
 #include <nn/act.h>
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
-
-#ifndef SMM_HOST
-#error "Build with SMM_HOST, SMM_PORT, SMM_PID and SMM_NEX_PASSWORD set, see the README"
-#endif
 
 WUPS_PLUGIN_NAME("SMM private server");
 WUPS_PLUGIN_DESCRIPTION("Plays Super Mario Maker on a private server");
-WUPS_PLUGIN_VERSION("v0.1.0");
+WUPS_PLUGIN_VERSION("v0.2.0");
 WUPS_PLUGIN_AUTHOR("super-mario-maker contributors");
 WUPS_PLUGIN_LICENSE("AGPLv3");
+
+// Lets the plugin read files on the SD card
+WUPS_USE_WUT_DEVOPTAB();
 
 // What the account system hands a game. Laid out as the Cemu emulator
 // lays it out, which is what games read
@@ -46,12 +56,63 @@ static_assert(sizeof(NexToken) == 0x25C, "NexToken has the wrong size");
 static_assert(offsetof(NexToken, nexPassword) == 0x204, "nexPassword is in the wrong place");
 static_assert(offsetof(NexToken, host) == 0x248, "host is in the wrong place");
 static_assert(offsetof(NexToken, port) == 0x258, "port is in the wrong place");
-static_assert(sizeof(SMM_HOST) <= sizeof(NexToken::host), "SMM_HOST is too long. It must be an IPv4 address");
-static_assert(sizeof(SMM_NEX_PASSWORD) <= sizeof(NexToken::nexPassword), "SMM_NEX_PASSWORD is too long");
+
+struct Settings {
+    char host[sizeof(NexToken::host)];
+    uint16_t port;
+    char password[sizeof(NexToken::nexPassword)];
+};
 
 // The game server IDs of Super Mario Maker, one for each region
 static bool isSuperMarioMakerServer(uint32_t serverId) {
     return serverId == 0x1018DB00 || serverId == 0x1018DC00 || serverId == 0x1018DD00;
+}
+
+// * Copies a value that has to fit, and refuses one that does not, so
+// * that a value is never cut short into something else
+static bool copyValue(char *to, size_t size, const char *from) {
+    size_t length = strcspn(from, "\r\n");
+    if (length == 0 || length >= size) {
+        return false;
+    }
+
+    memset(to, 0, size);
+    memcpy(to, from, length);
+
+    return true;
+}
+
+// * Reads the player's settings. Returns false when there are none, or
+// * they are not complete, in which case nothing is changed
+static bool readSettings(uint32_t pid, Settings &settings) {
+    char path[96];
+    snprintf(path, sizeof(path), "fs:/vol/external01/wiiu/smm-private-server/%lu.txt", (unsigned long) pid);
+
+    FILE *file = fopen(path, "r");
+    if (file == nullptr) {
+        return false;
+    }
+
+    memset(&settings, 0, sizeof(settings));
+
+    bool hasHost = false;
+    bool hasPassword = false;
+    char line[160];
+
+    while (fgets(line, sizeof(line), file) != nullptr) {
+        if (strncmp(line, "host=", 5) == 0) {
+            hasHost = copyValue(settings.host, sizeof(settings.host), line + 5);
+        } else if (strncmp(line, "port=", 5) == 0) {
+            long port = strtol(line + 5, nullptr, 10);
+            settings.port = (port > 0 && port < 65536) ? (uint16_t) port : 0;
+        } else if (strncmp(line, "password=", 9) == 0) {
+            hasPassword = copyValue(settings.password, sizeof(settings.password), line + 9);
+        }
+    }
+
+    fclose(file);
+
+    return hasHost && hasPassword && settings.port != 0;
 }
 
 static void copyText(char *to, size_t size, const char *from) {
@@ -68,13 +129,14 @@ DECL_FUNCTION(uint32_t, AcquireNexServiceToken, NexToken *token, uint32_t server
         return result;
     }
 
-    if (nn::act::GetPrincipalId() != SMM_PID) {
+    Settings settings;
+    if (!readSettings(nn::act::GetPrincipalId(), settings)) {
         return result;
     }
 
-    copyText(token->host, sizeof(token->host), SMM_HOST);
-    token->port = SMM_PORT;
-    copyText(token->nexPassword, sizeof(token->nexPassword), SMM_NEX_PASSWORD);
+    copyText(token->host, sizeof(token->host), settings.host);
+    token->port = settings.port;
+    copyText(token->nexPassword, sizeof(token->nexPassword), settings.password);
 
     // * The token the console's network made is not passed on to another
     // * server. This server does not check it, but a login needs one

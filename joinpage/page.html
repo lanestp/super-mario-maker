@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join the Mario Maker server</title>
+<style>
+:root {
+	--bg: #f6f4ef;
+	--card: #ffffff;
+	--ink: #1d1b18;
+	--muted: #5f5a52;
+	--line: #e2ddd3;
+	--accent: #c8341c;
+	--accent-ink: #ffffff;
+	--field: #fbfaf7;
+	--error-bg: #fdecea;
+	--error-ink: #8a1c0f;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #171614;
+		--card: #211f1c;
+		--ink: #f1ede6;
+		--muted: #b3aca1;
+		--line: #36322d;
+		--accent: #ef5a3c;
+		--accent-ink: #1a0e0b;
+		--field: #1a1917;
+		--error-bg: #3a1a14;
+		--error-ink: #ffb4a6;
+	}
+}
+* { box-sizing: border-box; }
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 980px; margin: 0 auto; padding: 40px 16px 64px; }
+header { margin-bottom: 32px; }
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+.lede { color: var(--muted); margin: 0; max-width: 60ch; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+section {
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 14px;
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+}
+h2 { font-size: 1.25rem; margin: 0 0 4px; }
+.for { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+label { display: block; font-weight: 600; font-size: 0.9rem; margin: 14px 0 6px; }
+.hint { display: block; font-weight: 400; color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+input {
+	width: 100%;
+	font: inherit;
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--field);
+	color: var(--ink);
+}
+input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+button {
+	margin-top: 20px;
+	width: 100%;
+	font: inherit;
+	font-weight: 600;
+	padding: 12px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--accent);
+	color: var(--accent-ink);
+	cursor: pointer;
+}
+button:hover { filter: brightness(1.05); }
+.error {
+	background: var(--error-bg);
+	color: var(--error-ink);
+	border-radius: 8px;
+	padding: 10px 12px;
+	margin: 0 0 4px;
+	font-size: 0.95rem;
+}
+ol { padding-left: 20px; margin: 20px 0 0; color: var(--muted); font-size: 0.95rem; }
+ol li { margin-bottom: 6px; }
+.after { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.notes { margin-top: 32px; color: var(--muted); font-size: 0.9rem; max-width: 70ch; }
+.notes h3 { color: var(--ink); font-size: 1rem; margin: 0 0 8px; }
+.notes p { margin: 0 0 8px; }
+code { font-size: 0.9em; background: var(--field); border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<main>
+	<header>
+		<h1>Join the Mario Maker server</h1>
+		<p class="lede">Pick how you play. You get a username here and a zip with everything to set up. You need an invite code from whoever runs the server.</p>
+	</header>
+
+	<div class="choices">
+		<section>
+			<h2>Cemu</h2>
+			<p class="for">On a computer, with the Cemu emulator and your own copy of the game.</p>
+			{{if eq .ErrorFor "cemu"}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+			<form method="post" action="/join/cemu">
+				<label for="cemu-invite">Invite code</label>
+				<input id="cemu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "cemu"}}value="{{.Invite}}"{{end}}>
+				<label for="cemu-username">Username
+					<span class="hint">6 to 16 letters, numbers, dots, dashes and underscores. Shown to other players.</span>
+				</label>
+				<input id="cemu-username" name="username" required minlength="6" maxlength="16" pattern="[A-Za-z0-9._\-]{6,16}" autocomplete="off" {{if eq .ErrorFor "cemu"}}value="{{.Username}}"{{end}}>
+				<button type="submit">Make my account and download</button>
+			</form>
+			<div class="after">
+				<ol>
+					<li>Start Cemu once, then close it.</li>
+					<li>In Cemu, <em>File &gt; Open Cemu folder</em>, and copy everything from the zip into it, merging folders.</li>
+					<li>In <em>Options &gt; General settings &gt; Account</em>, pick your username and set the network service to <em>Custom</em>.</li>
+					<li>Start the game and go into Course World.</li>
+				</ol>
+			</div>
+		</section>
+
+		{{if .WiiU}}
+		<section>
+			<h2>Wii U</h2>
+			<p class="for">On a Wii U running Aroma that already plays on Pretendo. Only Super Mario Maker comes here; everything else stays on Pretendo.</p>
+			{{if eq .ErrorFor "wiiu"}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+			<form method="post" action="/join/wiiu">
+				<label for="wiiu-invite">Invite code</label>
+				<input id="wiiu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.Invite}}"{{end}}>
+				<label for="wiiu-username">Username
+					<span class="hint">6 to 16 letters, numbers, dots, dashes and underscores.</span>
+				</label>
+				<input id="wiiu-username" name="username" required minlength="6" maxlength="16" pattern="[A-Za-z0-9._\-]{6,16}" autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.Username}}"{{end}}>
+				<label for="wiiu-pid">Pretendo player ID
+					<span class="hint">The number that identifies your Pretendo account, called its PID. Not your username.</span>
+				</label>
+				<input id="wiiu-pid" name="pid" required inputmode="numeric" pattern="[0-9]{1,10}" autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.PID}}"{{end}}>
+				<button type="submit">Make my account and download</button>
+			</form>
+			<div class="after">
+				<ol>
+					<li>Copy the <code>wiiu</code> folder from the zip onto the root of your SD card.</li>
+					<li>Start the console, sign in to that Pretendo account, and start Super Mario Maker.</li>
+					<li>To leave, delete <code>smm-private-server.wps</code> from the SD card.</li>
+				</ol>
+			</div>
+		</section>
+		{{end}}
+	</div>
+
+	<div class="notes">
+		<h3>Good to know</h3>
+		<p>Your zip lets whoever has it play as you. Keep it to yourself.</p>
+		<p>In Cemu, makers show without a face: Cemu can't draw Mii faces without files from a real Wii U.</p>
+		<p>Uploading a course ends with error 115-1101. The course is uploaded anyway; the error is the game failing to post to Miiverse, which doesn't exist here.</p>
+		{{if .WiiU}}<p>Playing on a real Wii U is new and hasn't been tried on a console yet.</p>{{end}}
+	</div>
+</main>
+</body>
+</html>

@@ -13,6 +13,7 @@ import (
 	"github.com/PretendoNetwork/super-mario-maker/accountapi"
 	"github.com/PretendoNetwork/super-mario-maker/fileproxy"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
+	"github.com/PretendoNetwork/super-mario-maker/joinpage"
 	"github.com/PretendoNetwork/super-mario-maker/store"
 	"github.com/PretendoNetwork/super-mario-maker/store/open"
 	"github.com/joho/godotenv"
@@ -173,6 +174,7 @@ func init() {
 
 	configureAccountAPI()
 	configureFileProxy()
+	configureJoinPage()
 }
 
 // * The account API is what a console asks where the game server
@@ -336,4 +338,56 @@ func ensureEventCourseMetadataFileExists() {
 	}
 
 	globals.Logger.Success("Event course metadata object found and is up to date!")
+}
+
+// * Serves the page where players make an account, on the account API's
+// * port, when PN_SMM_INVITE_CODE says what they have to give to join
+func configureJoinPage() {
+	inviteCode := strings.TrimSpace(os.Getenv("PN_SMM_INVITE_CODE"))
+	if inviteCode == "" {
+		return
+	}
+
+	if globals.AccountAPI == nil {
+		globals.Logger.Error("PN_SMM_INVITE_CODE is set, but the join page is served on the account API's port, which needs PN_SMM_ACCOUNT_HTTP_PORT")
+		os.Exit(1)
+	}
+
+	accountServerURL := strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_PUBLIC_URL"))
+	if accountServerURL == "" {
+		globals.Logger.Error("PN_SMM_INVITE_CODE is set, but PN_SMM_ACCOUNT_PUBLIC_URL is not. It is how players' Cemu reaches the account API, such as https://smm.example.com")
+		os.Exit(1)
+	}
+
+	// * Without the plugin, only Cemu is offered
+	var plugin []byte
+
+	if pluginPath := strings.TrimSpace(os.Getenv("PN_SMM_CONSOLE_PLUGIN")); pluginPath != "" {
+		data, err := os.ReadFile(pluginPath)
+		if err != nil {
+			globals.Logger.Errorf("PN_SMM_CONSOLE_PLUGIN can not be read: %s", err.Error())
+			os.Exit(1)
+		}
+
+		plugin = data
+	}
+
+	handler, err := joinpage.Handler(joinpage.Config{
+		Accounts:         globals.Store,
+		InviteCode:       inviteCode,
+		AccountServerURL: strings.TrimRight(accountServerURL, "/"),
+		GameServerHost:   strings.TrimSpace(os.Getenv("PN_SMM_SECURE_SERVER_HOST")),
+		GameServerPort:   globals.AccountAPI.Config.GameServerPort,
+		Plugin:           plugin,
+		LogError:         func(err error) { globals.Logger.Error(err.Error()) },
+	})
+	if err != nil {
+		globals.Logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	globals.AccountAPI.Join = handler
+	globals.AccountAPI.JoinPath = joinpage.Path
+
+	globals.Logger.Infof("Players can join at %s%s", strings.TrimRight(accountServerURL, "/"), joinpage.Path)
 }

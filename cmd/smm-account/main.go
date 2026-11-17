@@ -20,7 +20,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/PretendoNetwork/nex-go/v2/types"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/accounts"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
@@ -218,22 +217,7 @@ func createConsoleAccount(opened store.Store, username, pidText string) error {
 		return fmt.Errorf("%q is not a player ID", pidText)
 	}
 
-	if err := accounts.ValidUsername(username); err != nil {
-		return err
-	}
-
-	// * Courses made by an earlier player with the same PID, such as one
-	// * loaded from an archive, would become this player's
-	owned, nexError := opened.GetUserCourseObjectIDs(types.PID(pid))
-	if nexError != nil {
-		return nexError
-	}
-
-	if len(owned) > 0 {
-		return fmt.Errorf("PID %d already owns %d courses on this server, so it can not be given to a new player", pid, len(owned))
-	}
-
-	account, err := opened.CreateAccount(store.NewAccount{PID: uint32(pid), Username: username, MiiName: username})
+	account, err := accounts.CreateForConsole(opened, opened, username, uint32(pid))
 	if errors.Is(err, store.ErrPIDTaken) {
 		return fmt.Errorf("an account with PID %d already exists", pid)
 	}

@@ -51,6 +51,7 @@ sudo docker exec -it smm ./smm-account create <username>
 | `domain_name`             | Name to serve under over TLS, in a Route 53 zone of the account | plain HTTP |
 | `files_without_tls`       | Serve course files over plain HTTP on port 80, for emulators | `true`      |
 | `legacy_tls`              | Also accept TLS 1.0 and 1.1, for a Wii U            | `true`      |
+| `invite_code`             | Code players give on the join page at `/join`       | no page     |
 | `subnet_id`               | A public subnet to use, when the account has no room for another network | a network is made |
 | `name`                    | Name given to everything that is made               | `smm`       |
 | `instance_type`           | An arm64 instance type                              | `t4g.micro` |

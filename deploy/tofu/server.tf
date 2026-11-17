@@ -94,6 +94,12 @@ locals {
 
   plain_files_environment = local.plain_files ? { PN_SMM_FILE_HTTP_PORT = 80 } : {}
 
+  join_environment = var.invite_code == null ? {} : {
+    PN_SMM_INVITE_CODE        = var.invite_code
+    PN_SMM_ACCOUNT_PUBLIC_URL = local.base_url
+    PN_SMM_CONSOLE_PLUGIN     = "/home/go/app/smm-private-server.wps"
+  }
+
   tls_environment = local.use_tls ? {
     PN_SMM_ACCOUNT_HTTP_TLS_DOMAIN = var.domain_name
     # Kept on the database volume, so that a new instance does not ask
@@ -126,7 +132,7 @@ resource "aws_instance" "server" {
     registry     = split("/", aws_ecr_repository.server.repository_url)[0]
     image        = local.image
     data_volume  = replace(aws_ebs_volume.data.id, "-", "")
-    environment  = merge(local.server_environment, local.tls_environment, local.plain_files_environment)
+    environment  = merge(local.server_environment, local.tls_environment, local.plain_files_environment, local.join_environment)
     service_name = var.name
     root_ca      = file("${path.module}/${var.root_ca_file}")
   })

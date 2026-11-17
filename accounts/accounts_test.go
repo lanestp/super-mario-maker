@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/PretendoNetwork/nex-go/v2"
+	"github.com/PretendoNetwork/nex-go/v2/types"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/accounts"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
@@ -166,5 +168,49 @@ func TestCreateRejectsBadInput(t *testing.T) {
 		if _, err := accounts.Create(s, username, "secret123", ""); err != nil {
 			t.Errorf("username %q was refused: %v", username, err)
 		}
+	}
+}
+
+type ownedCourses map[types.PID]int
+
+func (o ownedCourses) GetUserCourseObjectIDs(pid types.PID) (types.List[types.UInt64], *nex.Error) {
+	ids := types.NewList[types.UInt64]()
+	for i := range o[pid] {
+		ids = append(ids, types.UInt64(i+1))
+	}
+
+	return ids, nil
+}
+
+func TestCreateForConsoleUsesTheConsolesPIDAndNoPassword(t *testing.T) {
+	accountStore := openStore(t)
+
+	account, err := accounts.CreateForConsole(accountStore, ownedCourses{}, "ConsolePlayer", 1712345678)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if account.PID != 1712345678 || account.PasswordHash != "" || account.NEXPassword == "" {
+		t.Errorf("got %+v, want the given PID, no password and a NEX password", account)
+	}
+}
+
+func TestCreateForConsoleRefusesWhatItCanNotUse(t *testing.T) {
+	accountStore := openStore(t)
+
+	if _, err := accounts.CreateForConsole(accountStore, ownedCourses{1712345678: 2}, "ConsolePlayer", 1712345678); !errors.Is(err, accounts.ErrPIDHasCourses) {
+		t.Errorf("a PID that owns courses gave %v, want ErrPIDHasCourses", err)
+	}
+
+	if _, err := accounts.CreateForConsole(accountStore, ownedCourses{}, "no", 1712345678); !errors.Is(err, accounts.ErrInvalidUsername) {
+		t.Errorf("a bad username gave %v, want ErrInvalidUsername", err)
+	}
+
+	if _, err := accounts.CreateForConsole(accountStore, ownedCourses{}, "ConsolePlayer", 0); err == nil {
+		t.Error("no PID was accepted")
+	}
+
+	if _, err := accountStore.GetAccountByUsername("ConsolePlayer"); err == nil {
+		t.Error("an account was made by a refused request")
 	}
 }

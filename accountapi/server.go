@@ -45,6 +45,11 @@ type Server struct {
 	Files     http.Handler
 	FilesPath string
 
+	// Join, when set, is served under JoinPath on the same port: the page
+	// where players make an account
+	Join     http.Handler
+	JoinPath string
+
 	// PlainFilesPort, when set, also serves Files on that port without
 	// TLS, and nothing else. A game checks a server it reaches over TLS
 	// for files against the console's own certificates, which an emulator
@@ -159,10 +164,19 @@ func (s Server) ListenAndServe() error {
 		return err
 	}
 
-	if s.Files != nil {
+	if s.Files != nil || s.Join != nil {
 		mux := http.NewServeMux()
-		mux.Handle(s.FilesPath, s.Files)
-		mux.Handle(s.FilesPath+"/", s.Files)
+
+		if s.Files != nil {
+			mux.Handle(s.FilesPath, s.Files)
+			mux.Handle(s.FilesPath+"/", s.Files)
+		}
+
+		if s.Join != nil {
+			mux.Handle(s.JoinPath, s.Join)
+			mux.Handle(s.JoinPath+"/", s.Join)
+		}
+
 		mux.Handle("/", handler)
 
 		handler = mux

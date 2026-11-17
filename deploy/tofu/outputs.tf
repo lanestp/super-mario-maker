@@ -28,6 +28,11 @@ output "connect_command" {
   value       = "aws ssm start-session --region ${var.region} --target ${aws_instance.server.id}"
 }
 
+output "join_page_url" {
+  description = "Where players make an account, when there is an invite code"
+  value       = nonsensitive(var.invite_code == null) ? null : "${local.base_url}/join"
+}
+
 output "game_server_port" {
   description = "UDP port games log in to the game server on"
   value       = var.authentication_port

@@ -7,6 +7,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"github.com/PretendoNetwork/nex-go/v2"
+	"github.com/PretendoNetwork/nex-go/v2/types"
 	"regexp"
 
 	"github.com/PretendoNetwork/super-mario-maker/store"
@@ -107,4 +109,40 @@ func CheckPasswordHash(account store.Account, nintendoPasswordHash string) error
 // CheckPassword reports whether a password is the right one for the account
 func CheckPassword(account store.Account, password string) error {
 	return CheckPasswordHash(account, NintendoPasswordHash(account.PID, password))
+}
+
+// ErrPIDHasCourses is returned when making an account for a console with
+// a PID that already owns courses on this server, such as one an earlier
+// player had, or one loaded from an archive. They would become the new
+// player's
+var ErrPIDHasCourses = errors.New("this player ID already owns courses on this server")
+
+// CourseOwners is what is needed to tell whether a PID owns courses
+type CourseOwners interface {
+	GetUserCourseObjectIDs(ownerPID types.PID) (types.List[types.UInt64], *nex.Error)
+}
+
+// CreateForConsole makes the account a console signed in to another
+// network, such as Pretendo, plays Super Mario Maker here with. It has
+// that network's PID, as that is what the game logs in with, and no
+// password, as it never logs in to the account API
+func CreateForConsole(accountStore store.AccountStore, courses CourseOwners, username string, pid uint32) (store.Account, error) {
+	if err := ValidUsername(username); err != nil {
+		return store.Account{}, err
+	}
+
+	if pid == 0 {
+		return store.Account{}, errors.New("a player ID is needed")
+	}
+
+	owned, nexError := courses.GetUserCourseObjectIDs(types.PID(pid))
+	if nexError != nil {
+		return store.Account{}, nexError
+	}
+
+	if len(owned) > 0 {
+		return store.Account{}, ErrPIDHasCourses
+	}
+
+	return accountStore.CreateAccount(store.NewAccount{PID: pid, Username: username, MiiName: username})
 }

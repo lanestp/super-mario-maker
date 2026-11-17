@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	miidata "github.com/PretendoNetwork/super-mario-maker/mii"
 	"math/rand/v2"
 	"path/filepath"
 	"testing"
@@ -340,7 +341,7 @@ func TestMiiChecksumMatchesTheOneInARealMii(t *testing.T) {
 
 	mii := meta[0x18 : 0x18+96]
 
-	if got, want := seed.MiiChecksum(mii[:94]), uint16(0x10b1); got != want {
+	if got, want := miidata.Checksum(mii[:94]), uint16(0x10b1); got != want {
 		t.Errorf("checksum is %04x, the real Mii has %04x", got, want)
 	}
 }
@@ -366,7 +367,7 @@ func TestMakerMetaBinaryRenamesTheMiiAndKeepsItValid(t *testing.T) {
 		t.Errorf("the Mii is named %q, want SeedMaker0", got)
 	}
 
-	if binary.BigEndian.Uint16(mii[94:]) != seed.MiiChecksum(mii[:94]) {
+	if binary.BigEndian.Uint16(mii[94:]) != miidata.Checksum(mii[:94]) {
 		t.Error("the checksum of the renamed Mii is wrong, so a game would refuse it")
 	}
 

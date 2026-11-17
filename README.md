@@ -1,10 +1,57 @@
-# Super Mario Maker replacement server
-Includes both the authentication and secure servers. Works on both WiiU and 3DS
+# Super Mario Maker private server
 
-## DataStore (S3)
-This server requires an S3 compatible server to store user generated content. The WiiU and 3DS only support TLS versions 1.0 and 1.1 with RSA SSL ciphers, so an S3 server supporting these is required. The server must also support presigned `POST` URLs. This does not leave many options, as nearly all S3 cloud providers no longer support one of these 2 things. Even AWS, the creators of S3 and the provider Nintendo uses, is [dropping support for TLS versions below 1.2 in December 2023](https://aws.amazon.com/blogs/security/tls-1-2-required-for-aws-endpoints/)
+A server for running your own Super Mario Maker (Wii U) world: Course World, 100 Mario, uploading and playing courses, makers, stars and records, for a group of friends instead of the whole internet.
 
-For this reason, the recommended setup is using [MinIO](https://min.io/) to self host your S3 server and using [Cloudflare Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to act as your reverse proxy. Tunnels support TLS versions 1.0 and 1.1 with the required ciphers, essentially using it as a TLS proxy. This does come at some cost, and you now must manage data storage and security yourself through MinIO, but there are no other options at this time outside of self hosting
+It is a fork of [Pretendo Network's Super Mario Maker server](https://github.com/PretendoNetwork/super-mario-maker), and keeps everything that makes it work with the real game. On top of it, it adds what a small private server needs to stand on its own:
+
+- **Its own accounts and account server**, so no Pretendo or Nintendo account server is needed. Players join on a web page with an invite code and download a ready-made setup.
+- **SQLite or Postgres**, chosen at start. A private server needs no database server.
+- **Course files that never leave the server unchecked.** Games upload to and download from the server itself, which keeps them in a private S3 bucket. Everything a game reaches over HTTP is on one port, served over TLS with a certificate fetched from Let's Encrypt, old TLS included for the console.
+- **100 Mario and Course World by difficulty**, picking courses by how often attempts at them fail, as the game asks.
+- **Archived courses**, brought in from the archive of Nintendo's servers through an import service that checks each one, keeping their original IDs, makers, Miis, numbers and records.
+- **A Wii U plugin** that sends Super Mario Maker, and only Super Mario Maker, to the server, while the console stays on Pretendo for everything else.
+- **One command to run it on AWS**, with [OpenTofu](deploy/tofu).
+- **Tests**, including one that logs in and plays over the real game protocol with an independent client.
+
+## Where it stands
+
+| | |
+| --- | --- |
+| Cemu emulator | Tried with the game: Course World, 100 Mario, playing, uploading, makers, stars, records, over TLS against a server on AWS |
+| Real Wii U | Built but **not tried** on a console: the plugin, old TLS, and the certificate games check files against |
+| Mii faces in Cemu | Not drawn, as Cemu needs the Mii files of a real Wii U. Names show |
+| Miiverse | Not served, so an upload ends with error 115-1101 after the course has been stored |
+| Courses made outside the game | Packing them is built (`coursefile`), but courses packed this way have not loaded in the game yet. Archived courses, which are the game's own files, do |
+
+## Getting started
+
+| To | See |
+| --- | --- |
+| Try everything on one machine | [Trying it on one machine](#trying-it-on-one-machine) |
+| Run a server others can join | [deploy/tofu](deploy/tofu) |
+| Let players join | `PN_SMM_INVITE_CODE`, then send them to `/join` on the server |
+| Bring in archived courses | [Bringing in courses from the archive](deploy/tofu/README.md#bringing-in-courses-from-the-archive) |
+| Play on a Wii U | [console-plugin](console-plugin) |
+
+Nothing from Nintendo is included. Players need their own copy of the game, and Cemu needs files from a real Wii U for some things, such as Mii faces. What this project hands players in place of a console's files are blank files and dummy certificates made for them.
+
+## License
+
+The server is under the [GNU Affero General Public License v3.0](LICENSE), as the Pretendo server it is a fork of is, and as the Pretendo libraries it is built on are. If you run a changed version for others, the AGPL asks you to offer them its source.
+
+These parts were written for this fork, use nothing under the AGPL, and are also under the [MIT license](https://opensource.org/license/mit), so that they can be used anywhere:
+
+| Part | What it is |
+| --- | --- |
+| [ash0](ash0) | The ASH0 compression course files use, both ways |
+| [coursefile](coursefile) | Reading and writing course files, and the meta binary a game needs with them |
+| [mii](mii) | Renaming a Mii and its checksum |
+| [console-plugin](console-plugin) | The Wii U plugin |
+| [deploy](deploy) | Running the server on AWS |
+
+## Thanks
+
+To [Pretendo Network](https://pretendo.network) and everyone who built the server this is a fork of and the libraries it stands on, to the [Cemu](https://cemu.info) project, whose source showed how a game reaches its servers, to [Archive Team](https://wiki.archiveteam.org) and the Internet Archive for saving Nintendo's servers before they closed, and to [kinnay's NintendoClients](https://github.com/kinnay/NintendoClients), which the end to end tests use.
 
 ## Compiling
 
@@ -12,7 +59,7 @@ For this reason, the recommended setup is using [MinIO](https://min.io/) to self
 Install [Go](https://go.dev/doc/install) and [git](https://git-scm.com/downloads), then clone and enter the repository
 
 ```bash
-$ git clone https://github.com/PretendoNetwork/super-mario-maker
+$ git clone https://github.com/lanestp/super-mario-maker
 $ cd super-mario-maker
 ```
 
@@ -49,6 +96,9 @@ The server can store its data in either Postgres or SQLite, chosen with `PN_SMM_
 - `sqlite` keeps everything in a single file and needs no database server, which suits a small private server
 
 Both pass the same set of storage tests (`store/storetest`)
+
+## Course files
+With `PN_SMM_FILE_BASE_URL` set, games upload and download course files through the server, on the account API's port, and the S3 bucket behind it is only ever reached by the server. Without it, games are sent to S3 itself, as the Pretendo server does. A Wii U only speaks TLS 1.0 and 1.1 with RSA ciphers, which nearly no S3 provider still offers, so the bucket would then need a proxy in front of it that does
 
 ## Accounts
 By default the server asks an account server for each player's NEX password over gRPC (`PN_SMM_ACCOUNTS=grpc`)

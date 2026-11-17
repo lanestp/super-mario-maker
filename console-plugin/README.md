@@ -19,3 +19,7 @@ docker run --rm --platform linux/amd64 -v "$PWD/console-plugin":/app smm-wiiu-bu
 ```
 
 `SMM_HOST` must be an IPv4 address, as the token has room for 15 characters.
+
+## License
+
+The plugin's source is under the MIT license, in [LICENSE](LICENSE). A built plugin also contains [wut](https://github.com/devkitPro/wut) (zlib license) and [the Wii U Plugin System](https://github.com/wiiu-env/WiiUPluginSystem) library (LGPL-3.0). Whoever hands out a built plugin must also make it possible to rebuild it, which pointing at this source and the build steps above does.

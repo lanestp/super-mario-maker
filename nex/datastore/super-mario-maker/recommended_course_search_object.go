@@ -1,6 +1,8 @@
 package nex_datastore_super_mario_maker
 
 import (
+	"os"
+
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
@@ -41,6 +43,10 @@ func RecommendedCourseSearchObject(err error, packet nex.PacketInterface, callID
 	if length < 0 || length > store.MaxRandomCourses {
 		globals.Logger.Warningf("Limiting request to %d courses (was %d)", store.MaxRandomCourses, length)
 		length = store.MaxRandomCourses
+	}
+
+	if os.Getenv("PN_SMM_LOG_LOOKUPS") == "1" {
+		globals.Logger.Infof("RecommendedCourseSearchObject: %d courses asked for, extra data %q, minimal rating frequency %d", length, []types.String(extraData), param.MinimalRatingFrequency)
 	}
 
 	// TODO - Use the offet? Real client never uses it, but might be nice for completeness sake?

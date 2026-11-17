@@ -92,6 +92,8 @@ locals {
     PN_SMM_FILE_BASE_URL = local.files_url
   }
 
+  log_environment = var.log_lookups ? { PN_SMM_LOG_LOOKUPS = "1" } : {}
+
   plain_files_environment = local.plain_files ? { PN_SMM_FILE_HTTP_PORT = 80 } : {}
 
   join_environment = var.invite_code == null ? {} : {
@@ -132,7 +134,7 @@ resource "aws_instance" "server" {
     registry     = split("/", aws_ecr_repository.server.repository_url)[0]
     image        = local.image
     data_volume  = replace(aws_ebs_volume.data.id, "-", "")
-    environment  = merge(local.server_environment, local.tls_environment, local.plain_files_environment, local.join_environment)
+    environment  = merge(local.server_environment, local.tls_environment, local.plain_files_environment, local.join_environment, local.log_environment)
     service_name = var.name
     root_ca      = file("${path.module}/${var.root_ca_file}")
   })

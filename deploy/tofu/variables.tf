@@ -72,6 +72,12 @@ variable "invite_code" {
   sensitive   = true
 }
 
+variable "log_lookups" {
+  description = "Log what games look up and how they rate courses, for working out why something does not show"
+  type        = bool
+  default     = false
+}
+
 variable "subnet_id" {
   description = <<-EOT
     A public subnet to put the server in, such as one of the account's

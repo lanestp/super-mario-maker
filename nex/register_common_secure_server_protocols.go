@@ -1,6 +1,7 @@
 package nex
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/PretendoNetwork/nex-go/v2"
@@ -79,6 +80,8 @@ func registerCommonSecureProtocols() {
 	// * a game asks for when it looks up objects, and what it is given
 	if os.Getenv("PN_SMM_LOG_LOOKUPS") == "1" {
 		commonDataStoreProtocol.OnAfterGetMetasMultipleParam = logMetaLookups
+		commonDataStoreProtocol.OnAfterRateObject = logRating
+		commonDataStoreProtocol.OnAfterRateObjects = logRatings
 	}
 
 	globals.DatastoreCommon = commonDataStoreProtocol
@@ -101,5 +104,29 @@ func logMetaLookups(_ nex.PacketInterface, params types.List[datastore_types.Dat
 		}
 
 		globals.Logger.Infof("GetMetasMultipleParam: data id %d, owner %d slot %d, options %d -> object %d of type %d named %q, %d byte meta binary", param.DataID, param.PersistenceTarget.OwnerID, param.PersistenceTarget.PersistenceSlotID, param.ResultOption, info.DataID, info.DataType, string(info.Name), len(info.MetaBinary))
+	}
+}
+
+// * For finding out which rating slot a game uses for what: prints each
+// * rating, and what the object's slots hold after it
+func logRating(packet nex.PacketInterface, target datastore_types.DataStoreRatingTarget, param datastore_types.DataStoreRateObjectParam, _ types.Bool) {
+	logRatings(packet, types.List[datastore_types.DataStoreRatingTarget]{target}, types.List[datastore_types.DataStoreRateObjectParam]{param}, false, false)
+}
+
+func logRatings(packet nex.PacketInterface, targets types.List[datastore_types.DataStoreRatingTarget], params types.List[datastore_types.DataStoreRateObjectParam], _ types.Bool, _ types.Bool) {
+	for i := range targets {
+		value := int32(0)
+		if i < len(params) {
+			value = int32(params[i].RatingValue)
+		}
+
+		slots := ""
+		if ratings, nexError := globals.Store.GetObjectRatingsWithSlotByDataID(targets[i].DataID); nexError == nil {
+			for _, rating := range ratings {
+				slots += fmt.Sprintf(" %d:%d/%d", rating.Slot, rating.Rating.TotalValue, rating.Rating.Count)
+			}
+		}
+
+		globals.Logger.Infof("Rating: player %d rated object %d slot %d by %d. Slots now%s", packet.Sender().PID(), targets[i].DataID, targets[i].Slot, value, slots)
 	}
 }

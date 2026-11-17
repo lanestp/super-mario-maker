@@ -14,6 +14,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 
 	"github.com/PretendoNetwork/super-mario-maker/ash0"
@@ -95,16 +96,18 @@ const MetaBinarySize = 44
 
 // MetaBinary returns the meta binary a game stores on the server with a
 // course file. The game reads it before the file, to know how long each
-// compressed part is. A course stored without it loads with nothing in it.
+// compressed part is and to check that each arrived whole. A course
+// stored without it loads with nothing in it, and one with the wrong
+// checksums is refused as a broken course.
 //
-// The layout was read from a course uploaded by a real game: eleven big
-// endian 32 bit numbers, which are 3, 1, the sizes of the compressed main
-// area, sub area, preview picture and small picture, 2, and 16 bytes that
-// look like a checksum.
+// The layout was read from a course uploaded by a real game, and gives
+// the same 44 bytes for that file: eleven big endian 32 bit numbers,
+// which are 3, 1, the sizes of the compressed main area, sub area,
+// preview picture and small picture, 2, and the CRC-32 of the same four
+// compressed parts in the same order.
 //
-// GUESS. What the 16 bytes are a checksum of is not known. They are left
-// as zeros here. The meaning of the numbers 3, 1 and 2 is not known
-// either, and they are copied as they were seen
+// GUESS. The meaning of the numbers 3, 1 and 2 is not known. They are
+// copied as they were seen
 func MetaBinary(file []byte) ([]byte, error) {
 	if _, err := Unpack(file); err != nil {
 		return nil, err
@@ -115,14 +118,25 @@ func MetaBinary(file []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	size := func(part int) uint32 { return uint32(starts[part+1] - starts[part]) }
+	// * The order the meta binary lists the parts in, which is not the
+	// * order they have in the file
+	order := [partCount]int{1, 2, 0, 3}
 
 	meta := make([]byte, 0, MetaBinarySize)
-	for _, number := range []uint32{3, 1, size(1), size(2), size(0), size(3), 2} {
-		meta = binary.BigEndian.AppendUint32(meta, number)
+	meta = binary.BigEndian.AppendUint32(meta, 3)
+	meta = binary.BigEndian.AppendUint32(meta, 1)
+
+	for _, part := range order {
+		meta = binary.BigEndian.AppendUint32(meta, uint32(starts[part+1]-starts[part]))
 	}
 
-	return append(meta, make([]byte, 16)...), nil
+	meta = binary.BigEndian.AppendUint32(meta, 2)
+
+	for _, part := range order {
+		meta = binary.BigEndian.AppendUint32(meta, crc32.ChecksumIEEE(file[starts[part]:starts[part+1]]))
+	}
+
+	return meta, nil
 }
 
 // Unpack reads the file a game uploaded for a course

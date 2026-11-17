@@ -87,6 +87,9 @@ locals {
     PN_SMM_CONFIG_S3_SECURE           = "true"
     PN_SMM_CONFIG_S3_BUCKET           = aws_s3_bucket.courses.id
     PN_SMM_CONFIG_S3_KEY_BASE         = var.s3_key_base
+    # Games upload and download course files through the server. Nothing
+    # outside the instance is ever given a link to the bucket
+    PN_SMM_FILE_BASE_URL = "http://${aws_eip.server.public_ip}:${var.account_http_port}"
   }
 }
 

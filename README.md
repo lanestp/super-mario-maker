@@ -139,6 +139,8 @@ All configuration options are handled via environment variables
 | `PN_SMM_GRPC_API_KEY`               | API key for your GRPC server                   | No (Assumed to be an open gRPC API) |
 | `PN_SMM_ACCOUNTS`                   | Where accounts are kept, `grpc` or `local`     | No (Defaults to `grpc`)             |
 | `PN_SMM_ACCOUNT_HTTP_PORT`          | Port to serve the account API on               | No (Not served when not set)        |
+| `PN_SMM_FILE_BASE_URL`              | How games reach this server, such as `https://smm.example.com`. When set, games upload and download course files through the server on the account API's port, and are never sent to S3 | No (Games are sent to S3)           |
+| `PN_SMM_FILE_URL_SECRET`            | Secret that signs the links to files           | No (A new one is made at each start) |
 | `PN_SMM_ACCOUNT_HTTP_TLS_CERT`      | Certificate to serve the account API over HTTPS | No (Served over HTTP)              |
 | `PN_SMM_ACCOUNT_HTTP_TLS_KEY`       | Private key for the certificate above          | No                                  |
 | `PN_SMM_GAME_SERVER_IDS`            | Game server IDs the account API answers for    | No (Defaults to the Super Mario Maker IDs) |

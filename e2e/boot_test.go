@@ -127,12 +127,14 @@ type server struct {
 func startServer(t *testing.T, s3 *s3test.Server) *server {
 	t.Helper()
 
-	return startServerWith(t, s3, nil)
+	return startServerWith(t, s3, false, nil)
 }
 
 // * Like startServer, but first calls setup with the database
-// * the server will use, so that it can be filled in
-func startServerWith(t *testing.T, s3 *s3test.Server, setup func(database *sqlite.Store)) *server {
+// * the server will use, so that it can be filled in. With
+// * filesThroughServer, games are sent to the server itself for course
+// * files, and not to S3
+func startServerWith(t *testing.T, s3 *s3test.Server, filesThroughServer bool, setup func(database *sqlite.Store)) *server {
 	t.Helper()
 
 	directory := t.TempDir()
@@ -187,6 +189,10 @@ func startServerWith(t *testing.T, s3 *s3test.Server, setup func(database *sqlit
 		"PN_SMM_CONFIG_S3_SECURE=false",
 		"PN_SMM_CONFIG_S3_BUCKET=" + s3test.Bucket,
 		"PN_SMM_CONFIG_S3_KEY_BASE=courses",
+	}
+
+	if filesThroughServer {
+		started.command.Env = append(started.command.Env, "PN_SMM_FILE_BASE_URL=http://127.0.0.1:"+strconv.Itoa(started.AccountAPIPort))
 	}
 
 	if err := started.command.Start(); err != nil {
@@ -330,7 +336,7 @@ func TestConsoleCanLogInAndFindTheGameServer(t *testing.T) {
 
 	var account store.Account
 
-	started := startServerWith(t, s3, func(database *sqlite.Store) {
+	started := startServerWith(t, s3, false, func(database *sqlite.Store) {
 		var err error
 
 		account, err = accounts.Create(database, "PlayerOne", "secret123", "")

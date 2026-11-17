@@ -52,6 +52,9 @@ func registerCommonSecureProtocols() {
 
 	commonDataStoreProtocol.SetMinIOClient(globals.MinIOClient)
 	commonDataStoreProtocol.S3Bucket = os.Getenv("PN_SMM_CONFIG_S3_BUCKET")
+	// * The links games are given are made by this server's own
+	// * presigner, which may point them at the server and not at S3
+	commonDataStoreProtocol.S3Presigner = globals.Presigner
 	commonDataStoreProtocol.SetDataKeyBase(os.Getenv("PN_SMM_CONFIG_S3_KEY_BASE"))
 
 	commonDataStoreProtocol.GetObjectInfoByDataID = globals.Store.GetObjectInfoByDataID

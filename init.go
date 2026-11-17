@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/accountapi"
+	"github.com/PretendoNetwork/super-mario-maker/fileproxy"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 	"github.com/PretendoNetwork/super-mario-maker/store"
 	"github.com/PretendoNetwork/super-mario-maker/store/open"
@@ -170,6 +172,7 @@ func init() {
 	ensureEventCourseMetadataFileExists()
 
 	configureAccountAPI()
+	configureFileProxy()
 }
 
 // * The account API is what a console asks where the game server
@@ -222,6 +225,52 @@ func configureAccountAPI() {
 	}
 
 	globals.AccountAPI = server
+}
+
+// * Has games upload and download course files through this server, and
+// * not from S3 directly, when PN_SMM_FILE_BASE_URL says how games reach
+// * this server. The files are served on the account API's port
+func configureFileProxy() {
+	baseURL := strings.TrimSpace(os.Getenv("PN_SMM_FILE_BASE_URL"))
+	if baseURL == "" {
+		return
+	}
+
+	if globals.AccountAPI == nil {
+		globals.Logger.Error("PN_SMM_FILE_BASE_URL is set, but files are served on the account API's port, which needs PN_SMM_ACCOUNT_HTTP_PORT")
+		os.Exit(1)
+	}
+
+	parsed, err := url.Parse(baseURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		globals.Logger.Errorf("PN_SMM_FILE_BASE_URL is not a valid address. Expected something like https://smm.example.com, got %s", baseURL)
+		os.Exit(1)
+	}
+
+	// * Links signed before a restart stop working when the secret is
+	// * made new each time, which is fine as they only last 15 minutes
+	secret := []byte(os.Getenv("PN_SMM_FILE_URL_SECRET"))
+	if len(secret) == 0 {
+		secret = make([]byte, 32)
+
+		if _, err := rand.Read(secret); err != nil {
+			globals.Logger.Error("Error generating the secret that signs links to files")
+			os.Exit(1)
+		}
+	}
+
+	proxy := &fileproxy.Proxy{
+		BaseURL:  parsed,
+		Secret:   secret,
+		Storage:  fileproxy.S3{Client: globals.MinIOClient, Bucket: os.Getenv("PN_SMM_CONFIG_S3_BUCKET")},
+		LogError: func(err error) { globals.Logger.Error(err.Error()) },
+	}
+
+	globals.Presigner = proxy
+	globals.AccountAPI.Files = proxy.Handler()
+	globals.AccountAPI.FilesPath = fileproxy.Path
+
+	globals.Logger.Infof("Games upload and download files through this server, at %s", parsed.JoinPath(fileproxy.Path))
 }
 
 func ensureEventCourseMetadataFileExists() {

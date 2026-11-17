@@ -1,7 +1,7 @@
 data "aws_caller_identity" "current" {}
 
-# Course files. Games upload to and download from the bucket directly,
-# with links the server signs, so the bucket itself stays private
+# Course files. Only the server reads and writes the bucket. Games upload
+# and download through the server, and are never given a link to it
 resource "aws_s3_bucket" "courses" {
   bucket = "${var.name}-courses-${data.aws_caller_identity.current.account_id}-${var.region}"
 }

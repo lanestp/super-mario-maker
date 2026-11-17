@@ -8,6 +8,12 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
+// FilePresigner makes links to a file that work for a limited time
+type FilePresigner interface {
+	GetObject(bucket, key string, lifetime time.Duration) (*url.URL, error)
+	PostObject(bucket, key string, lifetime time.Duration) (*url.URL, map[string]string, error)
+}
+
 type S3Presigner struct {
 	minio *minio.Client
 }

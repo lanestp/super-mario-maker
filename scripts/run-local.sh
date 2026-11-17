@@ -49,5 +49,7 @@ export PN_SMM_CONFIG_S3_ACCESS_SECRET=local-secret
 export PN_SMM_CONFIG_S3_SECURE=false
 export PN_SMM_CONFIG_S3_BUCKET=smm
 export PN_SMM_CONFIG_S3_KEY_BASE=courses
+# Games upload and download files through the server, and not from S3
+export PN_SMM_FILE_BASE_URL=http://127.0.0.1:8383
 
 build/super-mario-maker

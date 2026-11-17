@@ -4,7 +4,7 @@ This makes everything a small private server needs, with [OpenTofu](https://open
 
 - an EC2 instance that runs the server image, with the database in SQLite
 - a volume of its own for the database, with a snapshot taken every day
-- a private S3 bucket for course files, which keeps earlier copies of changed files for 30 days
+- a private S3 bucket for course files, which keeps earlier copies of changed files for 30 days. Only the server reaches it: games upload and download through the server
 - a registry for the server image
 - a fixed address, and a network of its own
 
@@ -14,7 +14,7 @@ The instance holds no stored keys. It reaches S3 and the registry with its own r
 
 **The account API has no TLS yet.** A console sends a hash of its password to it, and over plain HTTP anyone on the path can read and reuse it. `allowed_cidrs` has no default for this reason: list only networks you trust.
 
-**This has only been tried with the Cemu emulator.** A real Wii U only speaks old versions of TLS, both to the account API and to S3, and nothing here serves those yet. It also needs a patch that points it at this server.
+**This has only been tried with the Cemu emulator.** A real Wii U only speaks old versions of TLS, and nothing here serves those yet. Everything a console talks to over HTTP, the account API and course files alike, is on the one port of the server, so that is the one place a certificate a console accepts has to go. A console also needs a patch that points it at this server.
 
 **It costs money** for as long as it exists: an instance, a public address, two small volumes and what is stored.
 

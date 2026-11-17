@@ -62,7 +62,7 @@ func TestConsoleCanUploadAndDownloadACourse(t *testing.T) {
 
 	var account store.Account
 
-	started := startServerWith(t, s3, func(database *sqlite.Store) {
+	started := startServerWith(t, s3, true, func(database *sqlite.Store) {
 		var err error
 
 		account, err = accounts.Create(database, "PlayerOne", "secret123", "")
@@ -103,8 +103,16 @@ func TestConsoleCanUploadAndDownloadACourse(t *testing.T) {
 		t.Errorf("the upload got status %d", result.UploadStatus)
 	}
 
-	if !strings.Contains(result.UploadURL, s3.Endpoint) || !strings.Contains(result.DownloadURL, s3.Endpoint) {
-		t.Errorf("the client was not sent to the S3 server: upload %s, download %s", result.UploadURL, result.DownloadURL)
+	// * The client must only ever be sent to the server itself for
+	// * files, never to the S3 server behind it
+	server := "http://127.0.0.1:" + strconv.Itoa(started.AccountAPIPort) + "/v1/files"
+
+	if !strings.HasPrefix(result.UploadURL, server) || !strings.HasPrefix(result.DownloadURL, server) {
+		t.Errorf("the client was not sent to the server for files: upload %s, download %s", result.UploadURL, result.DownloadURL)
+	}
+
+	if strings.Contains(result.UploadURL, s3.Endpoint) || strings.Contains(result.DownloadURL, s3.Endpoint) {
+		t.Errorf("the client was sent to the S3 server: upload %s, download %s", result.UploadURL, result.DownloadURL)
 	}
 
 	meta := result.Meta

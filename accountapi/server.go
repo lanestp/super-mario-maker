@@ -17,6 +17,12 @@ type Server struct {
 	// private key to serve HTTPS with. HTTP is served when both are empty
 	TLSCertificatePath string
 	TLSKeyPath         string
+
+	// Files, when set, is served under FilesPath on the same port, so
+	// that games reach course files through this server and with its
+	// certificate
+	Files     http.Handler
+	FilesPath string
 }
 
 // ListenAndServe serves the account API until it fails
@@ -24,6 +30,15 @@ func (s Server) ListenAndServe() error {
 	handler, err := Handler(s.Config)
 	if err != nil {
 		return err
+	}
+
+	if s.Files != nil {
+		mux := http.NewServeMux()
+		mux.Handle(s.FilesPath, s.Files)
+		mux.Handle(s.FilesPath+"/", s.Files)
+		mux.Handle("/", handler)
+
+		handler = mux
 	}
 
 	httpServer := &http.Server{

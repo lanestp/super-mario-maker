@@ -27,7 +27,11 @@ var GRPCAccountClientConnection *grpc.ClientConn
 var GRPCAccountClient pb.AccountClient
 var GRPCAccountCommonMetadata metadata.MD
 var MinIOClient *minio.Client
-var Presigner *S3Presigner
+
+// Presigner makes the links games upload files to and download them
+// from. They point at S3 itself, or at this server when it passes files
+// along itself
+var Presigner FilePresigner
 var GRPCAPIKey string
 var GRPCServerPort int
 

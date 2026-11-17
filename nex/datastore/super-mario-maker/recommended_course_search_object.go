@@ -84,7 +84,8 @@ func DifficultyFilter(extraData types.List[types.String]) (store.FailureRateFilt
 
 // * Picks courses of the difficulty asked for. When too few have been
 // * tried enough to know their difficulty, courses that have not are
-// * added, as 100 Mario can not start with too few
+// * added, and then courses of any difficulty, as 100 Mario can not
+// * start with too few
 func recommendedCourses(length int, extraData types.List[types.String]) (types.List[datastore_super_mario_maker_types.DataStoreCustomRankingResult], *nex.Error) {
 	filter, byDifficulty := DifficultyFilter(extraData)
 	if !byDifficulty {
@@ -107,5 +108,40 @@ func recommendedCourses(length int, extraData types.List[types.String]) (types.L
 		courses = append(courses, unrated...)
 	}
 
+	// * Still too few, as on a server with few courses of a difficulty:
+	// * the rest are filled with courses of any difficulty, so that 100
+	// * Mario still starts
+	if len(courses) < length {
+		courses = fillWithAnyCourses(courses, length)
+	}
+
 	return courses, nil
+}
+
+// * Adds courses picked at random, leaving out those already there, until
+// * there are length courses or no more to add
+func fillWithAnyCourses(courses types.List[datastore_super_mario_maker_types.DataStoreCustomRankingResult], length int) types.List[datastore_super_mario_maker_types.DataStoreCustomRankingResult] {
+	others, nexError := globals.Store.GetRandomCoursesWithLimit(length)
+	if nexError != nil {
+		// * The courses already found are still worth sending
+		return courses
+	}
+
+	picked := make(map[types.UInt64]bool, len(courses))
+	for _, course := range courses {
+		picked[course.MetaInfo.DataID] = true
+	}
+
+	for _, course := range others {
+		if len(courses) >= length {
+			break
+		}
+
+		if !picked[course.MetaInfo.DataID] {
+			picked[course.MetaInfo.DataID] = true
+			courses = append(courses, course)
+		}
+	}
+
+	return courses
 }

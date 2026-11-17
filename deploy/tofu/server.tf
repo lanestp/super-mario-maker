@@ -65,6 +65,12 @@ resource "random_password" "grpc_api_key" {
   special = false
 }
 
+# The token of the import service, which only tools on the instance reach
+resource "random_password" "import_token" {
+  length  = 40
+  special = false
+}
+
 data "aws_ssm_parameter" "ami" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"
 }
@@ -87,6 +93,8 @@ locals {
     PN_SMM_CONFIG_S3_SECURE           = "true"
     PN_SMM_CONFIG_S3_BUCKET           = aws_s3_bucket.courses.id
     PN_SMM_CONFIG_S3_KEY_BASE         = var.s3_key_base
+    PN_SMM_IMPORT_TOKEN               = random_password.import_token.result
+    PN_SMM_IMPORT_ADDRESS             = "127.0.0.1:8384"
     # Games upload and download course files through the server. Nothing
     # outside the instance is ever given a link to the bucket
     PN_SMM_FILE_BASE_URL = local.files_url

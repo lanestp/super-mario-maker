@@ -4,10 +4,12 @@
 package store
 
 import (
+	"errors"
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_smm_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
+	"time"
 )
 
 // MaxRandomCourses is the most courses a single random course search will return.
@@ -29,6 +31,10 @@ type Store interface {
 	// * Objects
 	InitializeObjectByPreparePostParam(ownerPID types.PID, param datastore_types.DataStorePreparePostParam) (uint64, *nex.Error)
 	InitializeObjectByAttachFileParam(ownerPID types.PID, param datastore_smm_types.DataStoreAttachFileParam) (types.UInt64, *nex.Error)
+	// ImportObject makes an object with a DataID of its own, such as a
+	// course's ID on Nintendo's servers, made at the given time. It is not
+	// marked as uploaded. It returns ErrObjectExists when the DataID is taken
+	ImportObject(dataID uint64, ownerPID types.PID, param datastore_types.DataStorePreparePostParam, created time.Time) error
 	IsObjectAvailable(dataID types.UInt64) *nex.Error
 	IsObjectAvailableWithPassword(dataID, password types.UInt64) *nex.Error
 	GetObjectInfoByDataID(dataID types.UInt64) (datastore_types.DataStoreMetaInfo, *nex.Error)
@@ -100,3 +106,13 @@ type FailureRateFilter struct {
 	// attempts instead, whatever their rate
 	Unrated bool
 }
+
+// ImportedDataIDLimit is above every DataID Nintendo's servers handed
+// out. Imported objects keep their DataIDs, which are below it, and once
+// something has been imported, the server's own new objects are given
+// DataIDs from here on, so that the two never meet
+const ImportedDataIDLimit = 1_000_000_000
+
+// ErrObjectExists is returned when importing an object with a DataID
+// another object already has
+var ErrObjectExists = errors.New("an object with this DataID already exists")

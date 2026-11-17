@@ -51,6 +51,7 @@ func Run(t *testing.T, backend Backend) {
 		{"RandomCourses", testRandomCourses},
 		{"RandomCoursesSkipUnavailable", testRandomCoursesSkipUnavailable},
 		{"RandomCoursesByFailureRate", testRandomCoursesByFailureRate},
+		{"ImportObject", testImportObject},
 		{"UnderReview", testUnderReview},
 		{"EventCourseMetadata", testEventCourseMetadata},
 		{"Accounts", testAccounts},
@@ -1056,5 +1057,53 @@ func testRandomCoursesByFailureRate(t *testing.T, s store.Store, backend Backend
 
 	if few, nexError := s.GetRandomCoursesByFailureRate(1, store.FailureRateFilter{MinPercent: 0, MaxPercent: 100, MinAttempts: 10}); nexError != nil || len(few) != 1 {
 		t.Errorf("asking for 1 course gave %d (%v)", len(few), nexError)
+	}
+}
+
+func testImportObject(t *testing.T, s store.Store, _ Backend) {
+	param := datastore_types.NewDataStorePreparePostParam()
+	param.Name = types.NewString("imported")
+	param.DataType = courseDataType
+	param.MetaBinary = types.NewQBuffer([]byte{1, 2, 3})
+
+	created := time.Date(2016, 4, 1, 21, 20, 10, 0, time.UTC)
+	const imported = 37585837
+
+	if err := s.ImportObject(imported, 1755555555, param, created); err != nil {
+		t.Fatal(err)
+	}
+
+	// * Not available until it is marked as uploaded, like any other object
+	mustFail(t, s.IsObjectAvailable(imported), nex.ResultCodes.DataStore.NotFound, "an imported object before it is uploaded")
+	mustSucceed(t, s.UpdateObjectUploadCompletedByDataID(imported, true))
+
+	info, nexError := s.GetObjectInfoByDataID(imported)
+	mustSucceed(t, nexError)
+
+	if info.Name != "imported" || info.OwnerID != 1755555555 || string(info.MetaBinary) != "\x01\x02\x03" {
+		t.Errorf("got %q owned by %d with meta binary %x", info.Name, info.OwnerID, []byte(info.MetaBinary))
+	}
+
+	if got := info.CreatedTime.Standard(); !got.Equal(created) {
+		t.Errorf("made at %s, want the given %s", got, created)
+	}
+
+	if err := s.ImportObject(imported, 1, param, created); !errors.Is(err, store.ErrObjectExists) {
+		t.Errorf("importing the same DataID again gave %v, want ErrObjectExists", err)
+	}
+
+	// * New objects are made above every DataID that can be imported, so
+	// * that a course imported later never finds its DataID taken
+	next := createObject(t, s, objectOptions{owner: 1000, name: "made after", dataType: courseDataType})
+	if next < store.ImportedDataIDLimit {
+		t.Errorf("an object made after the import got DataID %d, want one from %d", next, store.ImportedDataIDLimit)
+	}
+
+	if err := s.ImportObject(imported+1, 1755555555, param, created); err != nil {
+		t.Errorf("the next DataID could not be imported: %v", err)
+	}
+
+	if err := s.ImportObject(store.ImportedDataIDLimit, 1, param, created); err == nil || errors.Is(err, store.ErrObjectExists) {
+		t.Errorf("a DataID in the server's own range gave %v, want it refused", err)
 	}
 }

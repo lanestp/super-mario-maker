@@ -146,6 +146,8 @@ All configuration options are handled via environment variables
 | `PN_SMM_INVITE_CODE`                | When set, serves a page at `/join` on the account API's port where players with this code make an account and download what they need to play | No (No page) |
 | `PN_SMM_ACCOUNT_PUBLIC_URL`         | How players' Cemu reaches the account API, such as `https://smm.example.com`. Needed for the join page | With `PN_SMM_INVITE_CODE` |
 | `PN_SMM_CONSOLE_PLUGIN`             | The built Wii U plugin, which the join page hands to Wii U players. The server image has it at `/home/go/app/smm-private-server.wps` | No (Only Cemu is offered) |
+| `PN_SMM_IMPORT_TOKEN`               | When set, serves the import service, which `smm-import-archive` sends archived courses to, with this as its token | No |
+| `PN_SMM_IMPORT_ADDRESS`             | Loopback address to serve the import service on | No (`127.0.0.1:8384`) |
 | `PN_SMM_ACCOUNT_HTTP_TLS_DOMAIN`    | Name games reach this server by. A certificate for it is fetched from Let's Encrypt and kept up to date. The server must be reachable by that name on port 443 | No |
 | `PN_SMM_ACCOUNT_HTTP_TLS_CACHE`     | Directory fetched certificates are kept in     | No (Fetched again at each start)    |
 | `PN_SMM_ACCOUNT_HTTP_TLS_LEGACY`    | `true` to also accept TLS 1.0 and 1.1 and their ciphers, which is all a Wii U speaks. Weaker than what is used today | No (Refused) |

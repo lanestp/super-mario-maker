@@ -1,19 +1,25 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/accountapi"
 	"github.com/PretendoNetwork/super-mario-maker/fileproxy"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
+	"github.com/PretendoNetwork/super-mario-maker/importsvc"
 	"github.com/PretendoNetwork/super-mario-maker/joinpage"
+	"github.com/PretendoNetwork/super-mario-maker/seed"
 	"github.com/PretendoNetwork/super-mario-maker/store"
 	"github.com/PretendoNetwork/super-mario-maker/store/open"
 	"github.com/joho/godotenv"
@@ -175,6 +181,7 @@ func init() {
 	configureAccountAPI()
 	configureFileProxy()
 	configureJoinPage()
+	configureImportService()
 }
 
 // * The account API is what a console asks where the game server
@@ -390,4 +397,51 @@ func configureJoinPage() {
 	globals.AccountAPI.JoinPath = joinpage.Path
 
 	globals.Logger.Infof("Players can join at %s%s", strings.TrimRight(accountServerURL, "/"), joinpage.Path)
+}
+
+// * Serves the import service, which tools on this machine send archived
+// * courses to, when PN_SMM_IMPORT_TOKEN is set. It is only ever served
+// * on a loopback address
+func configureImportService() {
+	token := strings.TrimSpace(os.Getenv("PN_SMM_IMPORT_TOKEN"))
+	if token == "" {
+		return
+	}
+
+	address := strings.TrimSpace(os.Getenv("PN_SMM_IMPORT_ADDRESS"))
+	if address == "" {
+		address = "127.0.0.1:8384"
+	}
+
+	host, _, err := net.SplitHostPort(address)
+	if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
+		globals.Logger.Errorf("PN_SMM_IMPORT_ADDRESS must be a loopback address, such as 127.0.0.1:8384, as the import service is only for this machine. Got %s", address)
+		os.Exit(1)
+	}
+
+	storage := fileproxy.S3{Client: globals.MinIOClient, Bucket: os.Getenv("PN_SMM_CONFIG_S3_BUCKET")}
+
+	handler, err := importsvc.Handler(importsvc.Config{
+		Token: token,
+		Seeder: &seed.Seeder{
+			Store:   globals.Store,
+			KeyBase: os.Getenv("PN_SMM_CONFIG_S3_KEY_BASE"),
+			PutFile: func(key string, data []byte) error {
+				return storage.Put(context.Background(), key, data)
+			},
+		},
+		LogError: func(err error) { globals.Logger.Error(err.Error()) },
+	})
+	if err != nil {
+		globals.Logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	globals.ImportServer = &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       time.Minute,
+		WriteTimeout:      time.Minute,
+	}
 }

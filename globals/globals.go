@@ -10,6 +10,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"net/http"
 )
 
 var Logger *plogger.Logger
@@ -43,4 +44,7 @@ var GRPCAPIKey string
 var GRPCServerPort int
 
 // AccountAPI is the account HTTP API to serve, or nil when it is not enabled
+// ImportServer serves the import service, when it is turned on
+var ImportServer *http.Server
+
 var AccountAPI *accountapi.Server

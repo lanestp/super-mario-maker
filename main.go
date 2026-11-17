@@ -18,6 +18,17 @@ func main() {
 	go nex.StartAuthenticationServer()
 	go nex.StartSecureServer()
 
+	if globals.ImportServer != nil {
+		go func() {
+			globals.Logger.Successf("Serving the import service on %s", globals.ImportServer.Addr)
+
+			if err := globals.ImportServer.ListenAndServe(); err != nil {
+				globals.Logger.Criticalf("The import service stopped: %v", err)
+				os.Exit(1)
+			}
+		}()
+	}
+
 	if globals.AccountAPI != nil {
 		go func() {
 			globals.Logger.Successf("Serving the account API on port %d", globals.AccountAPI.Port)

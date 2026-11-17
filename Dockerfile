@@ -18,7 +18,8 @@ COPY . .
 ARG BUILD_STRING=pretendo.supermariomaker.docker
 RUN --mount=type=cache,target=/go/pkg/mod/ \
 	CGO_ENABLED=0 go build -ldflags "-X 'main.serverBuildString=${BUILD_STRING}'" -v -o ${app_dir}/build/server && \
-	CGO_ENABLED=0 go build -v -o ${app_dir}/build/smm-account ./cmd/smm-account
+	CGO_ENABLED=0 go build -v -o ${app_dir}/build/smm-account ./cmd/smm-account && \
+	CGO_ENABLED=0 go build -v -o ${app_dir}/build/smm-import-archive ./cmd/smm-import-archive
 
 
 # * Building the Wii U plugin the join page hands out. The tools only
@@ -46,6 +47,8 @@ COPY --from=build ${app_dir}/build/server ${app_dir}/server
 # * For making accounts on a server which keeps its own, with
 # * docker exec -it <container> ./smm-account create <username>
 COPY --from=build ${app_dir}/build/smm-account ${app_dir}/smm-account
+# * For bringing in courses from the archive, see deploy/tofu/README.md
+COPY --from=build ${app_dir}/build/smm-import-archive ${app_dir}/smm-import-archive
 COPY --from=plugin /plugin/smm-private-server.wps ${app_dir}/smm-private-server.wps
 
 CMD [ "./server" ]

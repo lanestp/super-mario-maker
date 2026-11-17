@@ -2,25 +2,51 @@ package sqlite
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_smm_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker/types"
 	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
+	"github.com/PretendoNetwork/super-mario-maker/store"
 )
 
 func (s *Store) InitializeObjectByPreparePostParam(ownerPID types.PID, param datastore_types.DataStorePreparePostParam) (uint64, *nex.Error) {
-	return s.insertObject(ownerPID, param, uint64(param.ReferDataID))
+	return s.insertObject(0, ownerPID, param, uint64(param.ReferDataID), time.Now())
+}
+
+func (s *Store) ImportObject(dataID uint64, ownerPID types.PID, param datastore_types.DataStorePreparePostParam, created time.Time) error {
+	if dataID == 0 || dataID >= store.ImportedDataIDLimit {
+		return fmt.Errorf("an imported object needs a DataID from 1 to %d", store.ImportedDataIDLimit-1)
+	}
+
+	_, nexError := s.insertObject(dataID, ownerPID, param, uint64(param.ReferDataID), created)
+	if nexError != nil {
+		if strings.Contains(nexError.Message, "UNIQUE constraint failed") {
+			return store.ErrObjectExists
+		}
+
+		return nexError
+	}
+
+	// * The server's own new objects carry on from ImportedDataIDLimit
+	_, err := s.db.Exec(`UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'objects'`, int64(store.ImportedDataIDLimit-1))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Store) InitializeObjectByAttachFileParam(ownerPID types.PID, param datastore_smm_types.DataStoreAttachFileParam) (types.UInt64, *nex.Error) {
-	dataID, nexError := s.insertObject(ownerPID, param.PostParam, uint64(param.ReferDataID))
+	dataID, nexError := s.insertObject(0, ownerPID, param.PostParam, uint64(param.ReferDataID), time.Now())
 
 	return types.UInt64(dataID), nexError
 }
 
-func (s *Store) insertObject(ownerPID types.PID, param datastore_types.DataStorePreparePostParam, referDataID uint64) (uint64, *nex.Error) {
+func (s *Store) insertObject(givenDataID uint64, ownerPID types.PID, param datastore_types.DataStorePreparePostParam, referDataID uint64, created time.Time) (uint64, *nex.Error) {
 	tags := make([]string, 0, len(param.Tags))
 	for i := range param.Tags {
 		tags = append(tags, string(param.Tags[i]))
@@ -31,16 +57,23 @@ func (s *Store) insertObject(ownerPID types.PID, param datastore_types.DataStore
 		extraData = append(extraData, string(param.ExtraData[i]))
 	}
 
-	now := toTimestamp(time.Now())
+	now := toTimestamp(created)
+
+	// * NULL makes SQLite pick the next DataID
+	var given any
+	if givenDataID != 0 {
+		given = int64(givenDataID)
+	}
 
 	var dataID int64
 
 	err := s.db.QueryRow(`INSERT INTO objects (
-		owner, size, name, data_type, meta_binary,
+		data_id, owner, size, name, data_type, meta_binary,
 		permission, permission_recipients, delete_permission, delete_permission_recipients,
 		flag, period, refer_data_id, tags, persistence_slot_id, extra_data,
 		creation_date, update_date
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING data_id`,
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING data_id`,
+		given,
 		int64(ownerPID),
 		int64(param.Size),
 		string(param.Name),

@@ -42,6 +42,21 @@ aws ssm start-session --target "$(tofu output -raw instance_id)"
 sudo docker exec -it smm ./smm-account create <username>
 ```
 
+## Bringing in courses from the archive
+
+The server has an import service on the instance's loopback address. `smm-import-archive` picks courses from a public index of the archive of Nintendo's servers, fetches each course file from the Wayback Machine, and sends it to the service, which checks it and writes it. It runs in a container of its own that is removed when it finishes, and keeps nothing on disk. It waits between requests to the archive, so thousands of courses take many hours.
+
+```bash
+aws ssm start-session --target "$(tofu output -raw instance_id)"
+sudo systemd-run --unit smm-import --collect \
+	docker run --rm --name smm-import --network host --env-file /etc/smm/environment \
+	"$(sudo docker inspect --format '{{.Config.Image}}' smm)" ./smm-import-archive -count 10000
+sudo journalctl -u smm-import -f      # to follow it
+sudo systemctl stop smm-import        # to stop it early
+```
+
+Courses keep their IDs from Nintendo's servers. Who holds a course's record, and their Mii, come from the archive, but they are given a made-up player ID, as the archive does not have theirs. Who cleared a course first is not archived, so the record holder stands in.
+
 ## Settings
 
 | Name                      | What it is                                          | Default     |

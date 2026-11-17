@@ -10,6 +10,7 @@ import (
 	datastore_db "github.com/PretendoNetwork/super-mario-maker/database/datastore"
 	datastore_smm_db "github.com/PretendoNetwork/super-mario-maker/database/datastore/super-mario-maker"
 	"github.com/PretendoNetwork/super-mario-maker/store"
+	"time"
 )
 
 // Store is a store.Store backed by the Postgres connection in database.Postgres
@@ -30,6 +31,10 @@ func (Store) InitializeObjectByPreparePostParam(ownerPID types.PID, param datast
 
 func (Store) InitializeObjectByAttachFileParam(ownerPID types.PID, param datastore_smm_types.DataStoreAttachFileParam) (types.UInt64, *nex.Error) {
 	return datastore_smm_db.InitializeObjectByAttachFileParam(ownerPID, param)
+}
+
+func (Store) ImportObject(dataID uint64, ownerPID types.PID, param datastore_types.DataStorePreparePostParam, created time.Time) error {
+	return datastore_db.ImportObject(dataID, ownerPID, param, created)
 }
 
 func (Store) IsObjectAvailable(dataID types.UInt64) *nex.Error {

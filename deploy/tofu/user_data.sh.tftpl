@@ -6,6 +6,11 @@ set -euo pipefail
 dnf install -y docker
 systemctl enable --now docker
 
+# The server does not run as root, and shares the instance's network, so
+# this lets it listen on port 443
+echo "net.ipv4.ip_unprivileged_port_start=443" > /etc/sysctl.d/90-smm.conf
+sysctl --system >/dev/null
+
 # The database volume is attached after the instance starts, so wait for it
 device=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${data_volume}
 for _ in $(seq 1 120); do

@@ -12,9 +12,11 @@ The instance holds no stored keys. It reaches S3 and the registry with its own r
 
 ## Before you start
 
-**The account API has no TLS yet.** A console sends a hash of its password to it, and over plain HTTP anyone on the path can read and reuse it. `allowed_cidrs` has no default for this reason: list only networks you trust.
+**Give it a `domain_name`.** Without one the account API is plain HTTP: a console sends a hash of its password to it, and anyone on the path can read and reuse it. With a name in a Route 53 zone of the account, the server fetches its own certificate from Let's Encrypt and serves everything over TLS on port 443.
 
-**This has only been tried with the Cemu emulator.** A real Wii U only speaks old versions of TLS, and nothing here serves those yet. Everything a console talks to over HTTP, the account API and course files alike, is on the one port of the server, so that is the one place a certificate a console accepts has to go. A console also needs a patch that points it at this server.
+**Old TLS is on by default with a domain**, as a Wii U speaks nothing newer. Current clients are still given current encryption. Set `legacy_tls = false` if only emulators will connect.
+
+**This has only been tried with the Cemu emulator.** Everything a console talks to over HTTP, the account API and course files alike, is on the one port of the server. A real Wii U also only trusts Nintendo's own certificate authorities, so it needs a patch that makes it accept this server's certificate and points it here. That has not been tried.
 
 **It costs money** for as long as it exists: an instance, a public address, two small volumes and what is stored.
 
@@ -46,6 +48,8 @@ sudo docker exec -it smm ./smm-account create <username>
 | ------------------------- | --------------------------------------------------- | ----------- |
 | `allowed_cidrs`           | Networks that may reach the server                  | none, required |
 | `region`                  | AWS region                                          | `us-east-1` |
+| `domain_name`             | Name to serve under over TLS, in a Route 53 zone of the account | plain HTTP |
+| `legacy_tls`              | Also accept TLS 1.0 and 1.1, for a Wii U            | `true`      |
 | `subnet_id`               | A public subnet to use, when the account has no room for another network | a network is made |
 | `name`                    | Name given to everything that is made               | `smm`       |
 | `instance_type`           | An arm64 instance type                              | `t4g.micro` |

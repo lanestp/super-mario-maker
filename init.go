@@ -217,6 +217,17 @@ func configureAccountAPI() {
 		Port:               port,
 		TLSCertificatePath: strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_HTTP_TLS_CERT")),
 		TLSKeyPath:         strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_HTTP_TLS_KEY")),
+		TLSDomain:          strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_HTTP_TLS_DOMAIN")),
+		TLSCacheDirectory:  strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_HTTP_TLS_CACHE")),
+	}
+
+	// * Anything but a clear yes leaves old TLS refused
+	server.LegacyTLS, _ = strconv.ParseBool(strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_HTTP_TLS_LEGACY")))
+
+	// * Found now, and not when the first console connects
+	if _, err := server.TLSConfig(); err != nil {
+		globals.Logger.Errorf("The account API can not be served over TLS: %s", err.Error())
+		os.Exit(1)
 	}
 
 	if err := server.Config.Validate(); err != nil {

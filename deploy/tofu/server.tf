@@ -76,7 +76,7 @@ locals {
     PN_SMM_DATABASE                   = "sqlite"
     PN_SMM_SQLITE_PATH                = "/data/smm.db"
     PN_SMM_ACCOUNTS                   = "local"
-    PN_SMM_ACCOUNT_HTTP_PORT          = var.account_http_port
+    PN_SMM_ACCOUNT_HTTP_PORT          = local.http_port
     PN_SMM_AUTHENTICATION_SERVER_PORT = var.authentication_port
     PN_SMM_SECURE_SERVER_HOST         = aws_eip.server.public_ip
     PN_SMM_SECURE_SERVER_PORT         = var.secure_port
@@ -89,8 +89,16 @@ locals {
     PN_SMM_CONFIG_S3_KEY_BASE         = var.s3_key_base
     # Games upload and download course files through the server. Nothing
     # outside the instance is ever given a link to the bucket
-    PN_SMM_FILE_BASE_URL = "http://${aws_eip.server.public_ip}:${var.account_http_port}"
+    PN_SMM_FILE_BASE_URL = local.base_url
   }
+
+  tls_environment = local.use_tls ? {
+    PN_SMM_ACCOUNT_HTTP_TLS_DOMAIN = var.domain_name
+    # Kept on the database volume, so that a new instance does not ask
+    # for a new certificate, which Let's Encrypt only allows so often
+    PN_SMM_ACCOUNT_HTTP_TLS_CACHE  = "/data/certificates"
+    PN_SMM_ACCOUNT_HTTP_TLS_LEGACY = tostring(var.legacy_tls)
+  } : {}
 }
 
 resource "aws_instance" "server" {
@@ -113,7 +121,7 @@ resource "aws_instance" "server" {
     registry     = split("/", aws_ecr_repository.server.repository_url)[0]
     image        = local.image
     data_volume  = replace(aws_ebs_volume.data.id, "-", "")
-    environment  = local.server_environment
+    environment  = merge(local.server_environment, local.tls_environment)
     service_name = var.name
   })
 

@@ -5,7 +5,7 @@ output "server_address" {
 
 output "account_api_url" {
   description = "What to give an emulator as its account server"
-  value       = "http://${aws_eip.server.public_ip}:${var.account_http_port}"
+  value       = local.base_url
 }
 
 output "bucket" {

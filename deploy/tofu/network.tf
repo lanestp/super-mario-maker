@@ -92,11 +92,13 @@ resource "aws_security_group" "server" {
   }
 
   ingress {
-    description = "Account API"
+    description = "Account API and course files"
     protocol    = "tcp"
-    from_port   = var.account_http_port
-    to_port     = var.account_http_port
-    cidr_blocks = var.allowed_cidrs
+    from_port   = local.http_port
+    to_port     = local.http_port
+    # Let's Encrypt has to reach the port to check the name, from
+    # addresses it does not publish, so with a domain it is open to all
+    cidr_blocks = local.use_tls ? ["0.0.0.0/0"] : var.allowed_cidrs
   }
 
   egress {
@@ -121,4 +123,31 @@ resource "aws_eip" "server" {
 resource "aws_eip_association" "server" {
   allocation_id = aws_eip.server.id
   instance_id   = aws_instance.server.id
+}
+
+# With a domain, the server is given a name and serves TLS on port 443
+
+locals {
+  use_tls   = var.domain_name != null
+  http_port = local.use_tls ? 443 : var.account_http_port
+  base_url  = local.use_tls ? "https://${var.domain_name}" : "http://${aws_eip.server.public_ip}:${var.account_http_port}"
+
+  # The zone is the domain with its first label taken off: example.com
+  # for smm.example.com
+  zone_name = local.use_tls ? join(".", slice(split(".", var.domain_name), 1, length(split(".", var.domain_name)))) : null
+}
+
+data "aws_route53_zone" "this" {
+  count = local.use_tls ? 1 : 0
+  name  = local.zone_name
+}
+
+resource "aws_route53_record" "server" {
+  count = local.use_tls ? 1 : 0
+
+  zone_id = data.aws_route53_zone.this[0].zone_id
+  name    = var.domain_name
+  type    = "A"
+  ttl     = 300
+  records = [aws_eip.server.public_ip]
 }

@@ -20,6 +20,23 @@ variable "allowed_cidrs" {
   type        = list(string)
 }
 
+variable "domain_name" {
+  description = <<-EOT
+    Name to serve the account API and course files under over TLS, such as
+    smm.example.com. It must be in a Route 53 zone of this account. A
+    certificate is fetched for it, and the API moves to port 443. Left
+    out, the API is served over plain HTTP on account_http_port
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "legacy_tls" {
+  description = "Also accept TLS 1.0 and 1.1, which is all a Wii U speaks. Only used with domain_name"
+  type        = bool
+  default     = true
+}
+
 variable "subnet_id" {
   description = <<-EOT
     A public subnet to put the server in, such as one of the account's

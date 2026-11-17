@@ -2,6 +2,8 @@ package seed_test
 
 import (
 	"database/sql"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"math/rand/v2"
 	"path/filepath"
@@ -142,6 +144,7 @@ func TestMakersGetAnAccountAndAMakerObjectWithTheCopiedMii(t *testing.T) {
 			t.Fatalf("%s has no maker object: %v", account.Username, nexError)
 		}
 
+		// * The stand-in Mii of the test player is too short to rename, so it is copied as it is
 		if string(maker.MetaBinary) != "the Mii of the real player" || maker.DataType != 1 {
 			t.Errorf("%s: maker object has type %d and Mii %q", account.Username, maker.DataType, maker.MetaBinary)
 		}
@@ -320,4 +323,75 @@ func keys(files map[string][]byte) []string {
 	}
 
 	return names
+}
+
+// * The meta binary of the maker object a real game made on a test
+// * server, for an account whose Mii was named "default"
+const realMakerMetaBinary = "425046430000000100000000000000000000000000010000010001100000d73e030034" +
+	"330100010001000100010000000100640065006600610075006c007400000000000000" +
+	"0100010001000100010001000106010001000100010001000100010001000100010001" +
+	"0001000100010001000100000010b10000000000000000000000000000000000000001"
+
+func TestMiiChecksumMatchesTheOneInARealMii(t *testing.T) {
+	meta, err := hex.DecodeString(realMakerMetaBinary)
+	if err != nil || len(meta) != 140 {
+		t.Fatalf("the real meta binary did not decode to 140 bytes: %d, %v", len(meta), err)
+	}
+
+	mii := meta[0x18 : 0x18+96]
+
+	if got, want := seed.MiiChecksum(mii[:94]), uint16(0x10b1); got != want {
+		t.Errorf("checksum is %04x, the real Mii has %04x", got, want)
+	}
+}
+
+func TestMakerMetaBinaryRenamesTheMiiAndKeepsItValid(t *testing.T) {
+	template, _ := hex.DecodeString(realMakerMetaBinary)
+
+	renamed := seed.MakerMetaBinary(template, "SeedMaker01", 1800000002)
+
+	if len(renamed) != len(template) {
+		t.Fatalf("the meta binary changed size from %d to %d", len(template), len(renamed))
+	}
+
+	mii := renamed[0x18 : 0x18+96]
+
+	// * A Mii name holds 10 characters, so the 11th is dropped
+	name := make([]uint16, 10)
+	for i := range name {
+		name[i] = binary.LittleEndian.Uint16(mii[0x1A+i*2:])
+	}
+
+	if got := string(utf16.Decode(name)); got != "SeedMaker0" {
+		t.Errorf("the Mii is named %q, want SeedMaker0", got)
+	}
+
+	if binary.BigEndian.Uint16(mii[94:]) != seed.MiiChecksum(mii[:94]) {
+		t.Error("the checksum of the renamed Mii is wrong, so a game would refuse it")
+	}
+
+	other := seed.MakerMetaBinary(template, "SeedMaker02", 1800000003)
+	if string(other[0x18+8:0x18+12]) == string(mii[8:12]) {
+		t.Error("two makers were given the same Mii ID")
+	}
+
+	// * Only the Mii's name, ID and checksum may change
+	for i := range template {
+		inName := i >= 0x18+0x1A && i < 0x18+0x1A+20
+		inID := i >= 0x18+8 && i < 0x18+12
+		inChecksum := i >= 0x18+94 && i < 0x18+96
+
+		if !inName && !inID && !inChecksum && renamed[i] != template[i] {
+			t.Fatalf("byte %#x changed from %02x to %02x", i, template[i], renamed[i])
+		}
+	}
+
+	if string(template[0x32:0x34]) != "d\x00" {
+		t.Error("the template was changed")
+	}
+
+	short := seed.MakerMetaBinary([]byte("too short"), "Name", 1)
+	if string(short) != "too short" {
+		t.Errorf("a meta binary with no room for a Mii became %q", short)
+	}
 }

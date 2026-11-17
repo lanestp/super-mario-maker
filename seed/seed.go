@@ -11,6 +11,7 @@
 package seed
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -77,6 +78,78 @@ type Seeder struct {
 	// KeyBase is the key prefix the server keeps course files under
 	KeyBase string
 	Random  *rand.Rand
+}
+
+// Where things are in the meta binary of a maker object, as read from one
+// a real game made: the maker's Mii, which is 96 bytes, and inside the
+// Mii its ID, its name of up to 10 UTF-16 characters, and at the end a
+// checksum that makes the checksum of the whole Mii come to zero
+const (
+	makerMiiOffset = 0x18
+	miiSize        = 96
+	miiIDOffset    = 0x8
+	miiNameOffset  = 0x1A
+	miiNameLength  = 10
+)
+
+// MakerMetaBinary returns a copy of the meta binary of a maker object
+// with the Mii inside it renamed and given its own ID, so that makers
+// that share a face are still told apart. A meta binary too short to
+// hold a Mii is returned as it is
+func MakerMetaBinary(template []byte, name string, id uint32) []byte {
+	meta := append([]byte{}, template...)
+	if len(meta) < makerMiiOffset+miiSize {
+		return meta
+	}
+
+	mii := meta[makerMiiOffset : makerMiiOffset+miiSize]
+
+	units := utf16.Encode([]rune(name))
+	units = units[:min(len(units), miiNameLength)]
+
+	for i := range miiNameLength {
+		var unit uint16
+		if i < len(units) {
+			unit = units[i]
+		}
+
+		binary.LittleEndian.PutUint16(mii[miiNameOffset+i*2:], unit)
+	}
+
+	binary.LittleEndian.PutUint32(mii[miiIDOffset:], id)
+	binary.BigEndian.PutUint16(mii[miiSize-2:], MiiChecksum(mii[:miiSize-2]))
+
+	return meta
+}
+
+// MiiChecksum is the checksum kept in the last two bytes of a Mii. With
+// it in place, the checksum of the whole Mii is zero
+func MiiChecksum(data []byte) uint16 {
+	var checksum uint16
+
+	for _, value := range data {
+		for bit := 7; bit >= 0; bit-- {
+			carry := checksum&0x8000 != 0
+			checksum = checksum<<1 | uint16(value>>bit&1)
+
+			if carry {
+				checksum ^= 0x1021
+			}
+		}
+	}
+
+	// * Two zero bytes are run through as well, standing in for the
+	// * checksum itself
+	for range 16 {
+		carry := checksum&0x8000 != 0
+		checksum <<= 1
+
+		if carry {
+			checksum ^= 0x1021
+		}
+	}
+
+	return checksum
 }
 
 // CourseName reads the name of a course from its main area
@@ -151,7 +224,7 @@ func (s *Seeder) Makers(prefix string, count int, miiFrom uint32) ([]types.PID, 
 		param := datastore_types.NewDataStorePreparePostParam()
 		param.Name = types.NewString(username)
 		param.DataType = makerDataType
-		param.MetaBinary = template.MetaBinary
+		param.MetaBinary = types.NewQBuffer(MakerMetaBinary(template.MetaBinary, username, uint32(pid)))
 		param.Permission = template.Permission
 		param.DelPermission = template.DelPermission
 		param.Flag = template.Flag

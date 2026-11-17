@@ -50,6 +50,17 @@ const (
 	// * which holds its stars
 	starsApplicationID = 0
 
+	// * The two rankings a real game was seen to make for its own maker
+	// * object when it entered Course World, both starting at 0. A game
+	// * asks for the first when it shows a maker, and shows nothing for a
+	// * maker that is not in it.
+	// *
+	// * GUESS. The first looks like the stars a maker has been given in
+	// * all, and the second the same for a shorter time. Stars given to
+	// * a made up course are added to the first
+	makerStarsApplicationID       = 300000000
+	makerRecentStarsApplicationID = 300002400
+
 	// * Where the course name is in the main area: 33 UTF-16 characters
 	nameOffset = 0x28
 	nameLength = 66
@@ -217,7 +228,13 @@ func (s *Seeder) Makers(prefix string, count int, miiFrom uint32) ([]types.PID, 
 		pid := types.PID(account.PID)
 		pids = append(pids, pid)
 
-		if _, nexError := s.makerOf(pid); nexError == nil {
+		if maker, nexError := s.makerOf(pid); nexError == nil {
+			// * A maker made before rankings were added gets them now.
+			// * Adding 0 leaves a ranking that is there as it is
+			if err := s.addMakerRankings(uint64(maker.DataID)); err != nil {
+				return nil, err
+			}
+
 			continue
 		}
 
@@ -231,12 +248,27 @@ func (s *Seeder) Makers(prefix string, count int, miiFrom uint32) ([]types.PID, 
 		param.Period = template.Period
 		param.Tags = template.Tags
 
-		if _, err := s.addObject(pid, param, makerRatingSlots); err != nil {
+		makerID, err := s.addObject(pid, param, makerRatingSlots)
+		if err != nil {
 			return nil, fmt.Errorf("maker object of %s: %w", username, err)
+		}
+
+		if err := s.addMakerRankings(makerID); err != nil {
+			return nil, err
 		}
 	}
 
 	return pids, nil
+}
+
+func (s *Seeder) addMakerRankings(makerID uint64) error {
+	for _, applicationID := range []types.UInt32{makerStarsApplicationID, makerRecentStarsApplicationID} {
+		if nexError := s.Store.InsertOrUpdateCustomRanking(types.UInt64(makerID), applicationID, 0); nexError != nil {
+			return nexError
+		}
+	}
+
+	return nil
 }
 
 func (s *Seeder) makerOf(pid types.PID) (datastore_types.DataStoreMetaInfo, *nex.Error) {
@@ -372,6 +404,14 @@ func (s *Seeder) Course(file []byte, owner types.PID, stats Stats) (uint64, erro
 
 	if nexError := s.Store.InsertOrUpdateCustomRanking(types.UInt64(dataID), starsApplicationID, types.UInt32(stats.Stars)); nexError != nil {
 		return 0, nexError
+	}
+
+	// * The stars of a course count towards its maker, if the owner has
+	// * a maker object
+	if maker, nexError := s.makerOf(owner); nexError == nil {
+		if nexError := s.Store.InsertOrUpdateCustomRanking(maker.DataID, makerStarsApplicationID, types.UInt32(stats.Stars)); nexError != nil {
+			return 0, nexError
+		}
 	}
 
 	return dataID, nil

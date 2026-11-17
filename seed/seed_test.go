@@ -478,3 +478,66 @@ func TestStarFillsAMakersStarredListWithOtherMakersCourses(t *testing.T) {
 		t.Errorf("the second maker's list has %d courses, want 3", len(starredBy(pids[1])))
 	}
 }
+
+// * A game shows nothing for a maker that has no ranking in application
+// * 300000000, which is how every made up maker first showed up
+func TestMakersAreRankedSoThatAGameShowsThem(t *testing.T) {
+	s := newSetup(t)
+
+	pids, err := s.seeder.Makers("SeedMaker", 2, s.player)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	makerObject := func(pid types.PID) types.UInt64 {
+		target := datastore_types.NewDataStorePersistenceTarget()
+		target.OwnerID = pid
+
+		info, nexError := s.store.GetObjectInfoByPersistenceTargetWithPassword(target, 0)
+		if nexError != nil {
+			t.Fatal(nexError)
+		}
+
+		return info.DataID
+	}
+
+	ranking := func(pid types.PID, applicationID types.UInt32) (uint32, bool) {
+		found := s.store.GetCustomRankingsByDataIDs(applicationID, types.List[types.UInt64]{makerObject(pid)})
+		if len(found) != 1 {
+			return 0, false
+		}
+
+		return uint32(found[0].Score), true
+	}
+
+	for _, pid := range pids {
+		for _, applicationID := range []types.UInt32{300000000, 300002400} {
+			if score, found := ranking(pid, applicationID); !found || score != 0 {
+				t.Errorf("maker %d in ranking %d: found %v with score %d, want found with 0", pid, applicationID, found, score)
+			}
+		}
+	}
+
+	for _, stars := range []int{4, 9} {
+		if _, err := s.seeder.Course(courseFile(t, "Course"), pids[0], seed.Stats{Stars: stars}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if score, _ := ranking(pids[0], 300000000); score != 13 {
+		t.Errorf("the maker of courses with 4 and 9 stars has %d stars, want 13", score)
+	}
+
+	if score, _ := ranking(pids[1], 300000000); score != 0 {
+		t.Errorf("a maker with no courses has %d stars, want 0", score)
+	}
+
+	// * Asking for the makers again must not change their stars
+	if _, err := s.seeder.Makers("SeedMaker", 2, s.player); err != nil {
+		t.Fatal(err)
+	}
+
+	if score, found := ranking(pids[0], 300000000); !found || score != 13 {
+		t.Errorf("after asking for the makers again the maker has %d stars, want 13", score)
+	}
+}

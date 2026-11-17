@@ -1,6 +1,8 @@
 package nex_datastore_super_mario_maker
 
 import (
+	"os"
+
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
@@ -61,6 +63,10 @@ func FollowingsLatestCourseSearchObject(err error, packet nex.PacketInterface, c
 
 			pRankingResults = append(pRankingResults, results[j])
 		}
+	}
+
+	if os.Getenv("PN_SMM_LOG_LOOKUPS") == "1" {
+		globals.Logger.Infof("FollowingsLatestCourseSearchObject: gave %d courses for %s", len(pRankingResults), param.FormatToString(0))
 	}
 
 	rmcResponseStream := nex.NewByteStreamOut(globals.SecureServer.LibraryVersions, globals.SecureServer.ByteStreamSettings)

@@ -1,6 +1,8 @@
 package nex_datastore_super_mario_maker
 
 import (
+	"os"
+
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastore_super_mario_maker "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
@@ -17,6 +19,10 @@ func GetCustomRankingByDataID(err error, packet nex.PacketInterface, callID uint
 
 	pRankingResult := globals.Store.GetCustomRankingsByDataIDs(param.ApplicationID, param.DataIDList)
 	pResults := make(types.List[types.QResult], 0, len(param.DataIDList))
+
+	if os.Getenv("PN_SMM_LOG_LOOKUPS") == "1" {
+		globals.Logger.Infof("GetCustomRankingByDataID: found %d of %s", len(pRankingResult), param.FormatToString(0))
+	}
 
 	for i := range pRankingResult {
 		// * This is kind of backwards.

@@ -24,6 +24,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -36,6 +37,9 @@ import (
 )
 
 const seededListName = "seeded.json"
+
+// * How many courses each made up maker stars
+const starsPerMaker = 6
 
 func main() {
 	miiFrom := flag.String("mii-from", "", "username of an account that has entered Course World. Its Mii is given to every made up maker")
@@ -125,6 +129,21 @@ func run(directory, miiFrom, prefix string, makerCount int, randomSeed uint64) e
 
 		added++
 		fmt.Printf("%s -> course %d by maker %d: %d plays, %d of %d attempts cleared, %d stars\n", name, dataID, owner, stats.Plays, stats.Clears, stats.Attempts, stats.Stars)
+	}
+
+	// * Every maker stars a few of the other makers' courses, so that
+	// * the list of starred courses on a maker's profile is not empty
+	courses := make([]uint64, 0, len(seeded))
+	for _, dataID := range seeded {
+		courses = append(courses, dataID)
+	}
+
+	slices.Sort(courses)
+
+	for _, maker := range makers {
+		if _, err := seeder.Star(maker, courses, starsPerMaker); err != nil {
+			return err
+		}
 	}
 
 	fmt.Printf("Added %d courses. %d of the files in %s are on the server\n", added, len(seeded), directory)

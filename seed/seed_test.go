@@ -395,3 +395,86 @@ func TestMakerMetaBinaryRenamesTheMiiAndKeepsItValid(t *testing.T) {
 		t.Errorf("a meta binary with no room for a Mii became %q", short)
 	}
 }
+
+func TestStarFillsAMakersStarredListWithOtherMakersCourses(t *testing.T) {
+	s := newSetup(t)
+
+	pids, err := s.seeder.Makers("SeedMaker", 2, s.player)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var courses []uint64
+	owners := map[uint64]types.PID{}
+
+	for i := range 6 {
+		owner := pids[i%2]
+
+		dataID, err := s.seeder.Course(courseFile(t, "Course"), owner, seed.Stats{})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		courses = append(courses, dataID)
+		owners[dataID] = owner
+	}
+
+	starredBy := func(maker types.PID) []uint64 {
+		target := datastore_types.NewDataStorePersistenceTarget()
+		target.OwnerID = maker
+
+		makerObject, nexError := s.store.GetObjectInfoByPersistenceTargetWithPassword(target, 0)
+		if nexError != nil {
+			t.Fatal(nexError)
+		}
+
+		entries, nexError := s.store.GetBufferQueuesByDataIDAndSlot(makerObject.DataID, 0)
+		if nexError != nil {
+			t.Fatal(nexError)
+		}
+
+		var ids []uint64
+		for _, entry := range entries {
+			if len(entry) != 8 {
+				t.Fatalf("an entry is %d bytes, want 8", len(entry))
+			}
+
+			ids = append(ids, binary.LittleEndian.Uint64(entry))
+		}
+
+		return ids
+	}
+
+	if count, err := s.seeder.Star(pids[0], courses, 2); err != nil || count != 2 {
+		t.Fatalf("starred %d courses (%v), want 2", count, err)
+	}
+
+	first := starredBy(pids[0])
+	if len(first) != 2 || first[0] == first[1] {
+		t.Fatalf("the starred list is %v, want two different courses", first)
+	}
+
+	for _, dataID := range first {
+		if owners[dataID] != pids[1] {
+			t.Errorf("course %d is in the list, which is not a course of the other maker", dataID)
+		}
+	}
+
+	// * Asking again must not grow the list
+	if _, err := s.seeder.Star(pids[0], courses, 2); err != nil {
+		t.Fatal(err)
+	}
+
+	if again := starredBy(pids[0]); len(again) != 2 {
+		t.Errorf("after asking again the list has %d courses, want 2", len(again))
+	}
+
+	// * There are only 3 courses by the other maker to star
+	if count, err := s.seeder.Star(pids[1], courses, 10); err != nil || count != 3 {
+		t.Errorf("starred %d courses (%v), want the 3 the other maker made", count, err)
+	}
+
+	if len(starredBy(pids[1])) != 3 {
+		t.Errorf("the second maker's list has %d courses, want 3", len(starredBy(pids[1])))
+	}
+}

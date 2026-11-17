@@ -274,6 +274,49 @@ func (s *Seeder) finishObject(dataID uint64, ratingSlots int) error {
 	return nil
 }
 
+// * The list on a maker object that holds the courses its maker starred.
+// * Each entry is the DataID of a course as 8 little endian bytes
+const starredCoursesSlot = 0
+
+// Star puts up to count of the courses, picked at random, in the list
+// of courses the maker has starred. A maker does not star their own
+// courses. The same courses are picked each time for the same maker, so
+// doing this again does not grow the list. It returns how many were starred
+func (s *Seeder) Star(maker types.PID, courses []uint64, count int) (int, error) {
+	makerObject, nexError := s.makerOf(maker)
+	if nexError != nil {
+		return 0, fmt.Errorf("maker %d has no maker object: %v", maker, nexError)
+	}
+
+	random := rand.New(rand.NewPCG(uint64(maker), starredCoursesSlot))
+	starred := 0
+
+	for _, pick := range random.Perm(len(courses)) {
+		if starred == count {
+			break
+		}
+
+		owner, nexError := s.Store.GetObjectOwnerByDataID(types.UInt64(courses[pick]))
+		if nexError != nil {
+			return starred, nexError
+		}
+
+		if types.PID(owner) == maker {
+			continue
+		}
+
+		entry := binary.LittleEndian.AppendUint64(nil, courses[pick])
+
+		if nexError := s.Store.InsertOrUpdateBufferQueueData(makerObject.DataID, starredCoursesSlot, types.NewQBuffer(entry)); nexError != nil {
+			return starred, nexError
+		}
+
+		starred++
+	}
+
+	return starred, nil
+}
+
 // Course adds a course file to the server as made by owner, with the
 // given numbers, and returns its DataID. The file must be one a game
 // could have uploaded

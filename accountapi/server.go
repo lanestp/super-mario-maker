@@ -50,9 +50,17 @@ type Server struct {
 // * do. A client that can do better is given better, as the server's
 // * order is the one used
 var legacyCipherSuites = []uint16{
+	// * A fetched certificate comes with either kind of key, and which
+	// * one a client is given depends on what it says it can check. So
+	// * both kinds are listed, or a client given the other kind is left
+	// * with no cipher it and the server share
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
 	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
 	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,

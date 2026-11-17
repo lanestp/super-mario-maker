@@ -1,6 +1,9 @@
 package accountapi
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -24,6 +27,30 @@ func writeCertificate(t *testing.T) (string, string, *x509.CertPool) {
 		t.Fatal(err)
 	}
 
+	return writeCertificateFor(t, key, &key.PublicKey, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+}
+
+// * The same with an elliptic curve key, the other kind Let's Encrypt
+// * hands out
+func writeEllipticCertificate(t *testing.T) (string, string, *x509.CertPool) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	der, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return writeCertificateFor(t, key, &key.PublicKey, &pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
+}
+
+func writeCertificateFor(t *testing.T, key crypto.Signer, public any, keyBlock *pem.Block) (string, string, *x509.CertPool) {
+	t.Helper()
+
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject:      pkix.Name{CommonName: "127.0.0.1"},
@@ -34,7 +61,7 @@ func writeCertificate(t *testing.T) (string, string, *x509.CertPool) {
 		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
 	}
 
-	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	der, err := x509.CreateCertificate(rand.Reader, template, template, public, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +74,7 @@ func writeCertificate(t *testing.T) (string, string, *x509.CertPool) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}), 0o600); err != nil {
+	if err := os.WriteFile(keyPath, pem.EncodeToMemory(keyBlock), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -207,5 +234,20 @@ func TestTLSConfigForADomainFetchesItsOwnCertificate(t *testing.T) {
 	// * fetched for it, as anyone can send any name
 	if _, err := config.GetCertificate(&tls.ClientHelloInfo{ServerName: "someone-else.example.com"}); err == nil {
 		t.Error("a certificate was offered for a name that is not this server's")
+	}
+}
+
+// * Found on the live server: with legacy TLS on, a client that was given
+// * the elliptic curve certificate and spoke TLS 1.2 was refused, as the
+// * ciphers listed were all for the other kind of key
+func TestLegacyTLSStillServesAClientGivenAnEllipticCurveCertificate(t *testing.T) {
+	certificatePath, keyPath, trusted := writeEllipticCertificate(t)
+
+	address := serveTLS(t, Server{TLSCertificatePath: certificatePath, TLSKeyPath: keyPath, LegacyTLS: true})
+
+	for name, version := range map[string]uint16{"TLS 1.2": tls.VersionTLS12, "TLS 1.3": tls.VersionTLS13} {
+		if _, err := handshake(address, trusted, version, nil); err != nil {
+			t.Errorf("%s was refused: %v", name, err)
+		}
 	}
 }

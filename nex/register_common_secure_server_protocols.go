@@ -3,10 +3,12 @@ package nex
 import (
 	"os"
 
+	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	datastorecommon "github.com/PretendoNetwork/nex-protocols-common-go/v2/datastore"
 	securecommon "github.com/PretendoNetwork/nex-protocols-common-go/v2/secure-connection"
 	datastoresmm "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/super-mario-maker"
+	datastore_types "github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
 	secure "github.com/PretendoNetwork/nex-protocols-go/v2/secure-connection"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 	nex_datastore_super_mario_maker "github.com/PretendoNetwork/super-mario-maker/nex/datastore/super-mario-maker"
@@ -65,5 +67,31 @@ func registerCommonSecureProtocols() {
 	commonDataStoreProtocol.RateObjectWithPassword = globals.Store.RateObjectWithPassword
 	commonDataStoreProtocol.DeleteObjectByDataID = globals.Store.DeleteObjectByDataID
 
+	// * For working out why a game does not show something. Prints what
+	// * a game asks for when it looks up objects, and what it is given
+	if os.Getenv("PN_SMM_LOG_LOOKUPS") == "1" {
+		commonDataStoreProtocol.OnAfterGetMetasMultipleParam = logMetaLookups
+	}
+
 	globals.DatastoreCommon = commonDataStoreProtocol
+}
+
+func logMetaLookups(_ nex.PacketInterface, params types.List[datastore_types.DataStoreGetMetaParam]) {
+	for _, param := range params {
+		var info datastore_types.DataStoreMetaInfo
+		var nexError *nex.Error
+
+		if param.DataID == 0 {
+			info, nexError = globals.Store.GetObjectInfoByPersistenceTargetWithPassword(param.PersistenceTarget, param.AccessPassword)
+		} else {
+			info, nexError = globals.Store.GetObjectInfoByDataIDWithPassword(param.DataID, param.AccessPassword)
+		}
+
+		if nexError != nil {
+			globals.Logger.Infof("GetMetasMultipleParam: data id %d, owner %d slot %d, options %d -> %s", param.DataID, param.PersistenceTarget.OwnerID, param.PersistenceTarget.PersistenceSlotID, param.ResultOption, nexError.Error())
+			continue
+		}
+
+		globals.Logger.Infof("GetMetasMultipleParam: data id %d, owner %d slot %d, options %d -> object %d of type %d named %q, %d byte meta binary", param.DataID, param.PersistenceTarget.OwnerID, param.PersistenceTarget.PersistenceSlotID, param.ResultOption, info.DataID, info.DataType, string(info.Name), len(info.MetaBinary))
+	}
 }

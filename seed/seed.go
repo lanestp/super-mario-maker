@@ -205,6 +205,11 @@ func (s *Seeder) finishObject(dataID uint64, ratingSlots int) error {
 // given numbers, and returns its DataID. The file must be one a game
 // could have uploaded
 func (s *Seeder) Course(file []byte, owner types.PID, stats Stats) (uint64, error) {
+	course, err := coursefile.Unpack(file)
+	if err != nil {
+		return 0, err
+	}
+
 	metaBinary, err := coursefile.MetaBinary(file)
 	if err != nil {
 		return 0, err
@@ -212,7 +217,10 @@ func (s *Seeder) Course(file []byte, owner types.PID, stats Stats) (uint64, erro
 
 	param := datastore_types.NewDataStorePreparePostParam()
 	param.Size = types.UInt32(len(file))
-	// * A game sends no name, as the name is in the file
+	// * The one course seen uploaded by a real game had no name in its
+	// * file and none on the server, so a game seems to send the name
+	// * that is in the file
+	param.Name = types.NewString(CourseName(course))
 	param.DataType = courseDataType
 	param.MetaBinary = types.NewQBuffer(metaBinary)
 	param.DelPermission.Permission = deletePermission

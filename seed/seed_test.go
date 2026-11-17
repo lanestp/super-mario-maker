@@ -227,8 +227,8 @@ func TestCourseIsListedWithItsFileNameOwnerAndNumbers(t *testing.T) {
 	}
 
 	info := listed[0].MetaInfo
-	if info.OwnerID != pids[0] || int(info.Size) != len(file) {
-		t.Errorf("listed as made by %d with size %d", info.OwnerID, info.Size)
+	if string(info.Name) != "Seeded Course" || info.OwnerID != pids[0] || int(info.Size) != len(file) {
+		t.Errorf("listed as %q by %d with size %d", info.Name, info.OwnerID, info.Size)
 	}
 
 	// * Without the meta binary a game loads the course with nothing in it

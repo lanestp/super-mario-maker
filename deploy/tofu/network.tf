@@ -1,7 +1,23 @@
-# A small network of its own, so that nothing here touches the account's
-# default network
+# A small network of its own, so that nothing here touches the rest of the
+# account. An account can only hold a few networks, so when subnet_id is
+# given that subnet is used and no network is made
+
+locals {
+  make_network = var.subnet_id == null
+
+  subnet_id         = local.make_network ? aws_subnet.public[0].id : var.subnet_id
+  vpc_id            = local.make_network ? aws_vpc.this[0].id : data.aws_subnet.given[0].vpc_id
+  availability_zone = local.make_network ? aws_subnet.public[0].availability_zone : data.aws_subnet.given[0].availability_zone
+}
+
+data "aws_subnet" "given" {
+  count = local.make_network ? 0 : 1
+  id    = var.subnet_id
+}
 
 resource "aws_vpc" "this" {
+  count = local.make_network ? 1 : 0
+
   cidr_block           = "10.42.0.0/24"
   enable_dns_support   = true
   enable_dns_hostnames = true
@@ -10,7 +26,9 @@ resource "aws_vpc" "this" {
 }
 
 resource "aws_internet_gateway" "this" {
-  vpc_id = aws_vpc.this.id
+  count = local.make_network ? 1 : 0
+
+  vpc_id = aws_vpc.this[0].id
 
   tags = { Name = var.name }
 }
@@ -20,7 +38,9 @@ data "aws_availability_zones" "available" {
 }
 
 resource "aws_subnet" "public" {
-  vpc_id            = aws_vpc.this.id
+  count = local.make_network ? 1 : 0
+
+  vpc_id            = aws_vpc.this[0].id
   cidr_block        = "10.42.0.0/26"
   availability_zone = data.aws_availability_zones.available.names[0]
 
@@ -28,19 +48,23 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.this.id
+  count = local.make_network ? 1 : 0
+
+  vpc_id = aws_vpc.this[0].id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.this.id
+    gateway_id = aws_internet_gateway.this[0].id
   }
 
   tags = { Name = "${var.name}-public" }
 }
 
 resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
+  count = local.make_network ? 1 : 0
+
+  subnet_id      = aws_subnet.public[0].id
+  route_table_id = aws_route_table.public[0].id
 }
 
 # The game protocol runs over UDP, and the account API over TCP. Nothing
@@ -49,7 +73,7 @@ resource "aws_route_table_association" "public" {
 resource "aws_security_group" "server" {
   name        = "${var.name}-server"
   description = "Super Mario Maker server"
-  vpc_id      = aws_vpc.this.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description = "Authentication server"

@@ -63,4 +63,7 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now ${service_name}.service
+systemctl enable ${service_name}.service
+# Not waited for: until an image has been pushed the service can not
+# start, and that is not a failure of setting up the instance
+systemctl start --no-block ${service_name}.service

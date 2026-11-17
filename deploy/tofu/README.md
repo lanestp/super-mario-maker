@@ -46,6 +46,7 @@ sudo docker exec -it smm ./smm-account create <username>
 | ------------------------- | --------------------------------------------------- | ----------- |
 | `allowed_cidrs`           | Networks that may reach the server                  | none, required |
 | `region`                  | AWS region                                          | `us-east-1` |
+| `subnet_id`               | A public subnet to use, when the account has no room for another network | a network is made |
 | `name`                    | Name given to everything that is made               | `smm`       |
 | `instance_type`           | An arm64 instance type                              | `t4g.micro` |
 | `data_volume_size`        | Size in GB of the database volume                   | `4`         |

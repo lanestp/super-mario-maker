@@ -4,5 +4,8 @@
 #   curl -s https://checkip.amazonaws.com
 allowed_cidrs = ["203.0.113.7/32"]
 
+# A public subnet to use, if the account has no room for another network
+# subnet_id = "subnet-0123456789abcdef0"
+
 # region        = "us-east-1"
 # instance_type = "t4g.micro"

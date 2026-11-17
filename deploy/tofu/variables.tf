@@ -20,6 +20,17 @@ variable "allowed_cidrs" {
   type        = list(string)
 }
 
+variable "subnet_id" {
+  description = <<-EOT
+    A public subnet to put the server in, such as one of the account's
+    default subnets. Left out, a network is made for the server alone. An
+    account can only hold a few networks, so give this when that fails
+    with VpcLimitExceeded
+  EOT
+  type        = string
+  default     = null
+}
+
 variable "instance_type" {
   description = "EC2 instance type. Must be an arm64 type, as the image is built for arm64"
   type        = string

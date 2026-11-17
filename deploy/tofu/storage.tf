@@ -126,7 +126,7 @@ resource "aws_ecr_lifecycle_policy" "server" {
 # The database is kept on a volume of its own, so that replacing the
 # instance does not lose it
 resource "aws_ebs_volume" "data" {
-  availability_zone = aws_subnet.public.availability_zone
+  availability_zone = local.availability_zone
   size              = var.data_volume_size
   type              = "gp3"
   encrypted         = true

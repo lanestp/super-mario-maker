@@ -96,7 +96,7 @@ locals {
 resource "aws_instance" "server" {
   ami                    = data.aws_ssm_parameter.ami.value
   instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public.id
+  subnet_id              = local.subnet_id
   vpc_security_group_ids = [aws_security_group.server.id]
   iam_instance_profile   = aws_iam_instance_profile.server.name
 

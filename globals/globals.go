@@ -28,6 +28,13 @@ var GRPCAccountClient pb.AccountClient
 var GRPCAccountCommonMetadata metadata.MD
 var MinIOClient *minio.Client
 
+// FileRootCA is the root certificate, in DER form, that games are told
+// to check the server against when they upload and download files. A
+// game does not use its own list of trusted certificates for this, nor
+// an emulator's: it trusts what the game server hands it. Empty when
+// files are not served over TLS
+var FileRootCA []byte
+
 // Presigner makes the links games upload files to and download them
 // from. They point at S3 itself, or at this server when it passes files
 // along itself

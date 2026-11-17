@@ -37,6 +37,19 @@ variable "legacy_tls" {
   default     = true
 }
 
+variable "root_ca_file" {
+  description = <<-EOT
+    Root certificate games are told to check the server against, as a file
+    in this directory. It must be the root the server's certificate leads
+    up to within two steps. The default is the Let's Encrypt root for
+    certificates with an RSA key, which is the kind a game is given. If
+    Let's Encrypt moves to another root, games will refuse the server
+    until this is changed to match
+  EOT
+  type        = string
+  default     = "certificates/lets-encrypt-root-yr.pem"
+}
+
 variable "subnet_id" {
   description = <<-EOT
     A public subnet to put the server in, such as one of the account's

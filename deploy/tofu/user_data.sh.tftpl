@@ -45,6 +45,10 @@ ${key}=${value}
 ENVIRONMENT
 umask 022
 
+cat > /etc/${service_name}/root-ca.pem <<'CERTIFICATE'
+${root_ca}
+CERTIFICATE
+
 cat > /etc/systemd/system/${service_name}.service <<'UNIT'
 [Unit]
 Description=Super Mario Maker server
@@ -58,7 +62,7 @@ RequiresMountsFor=/data
 ExecStartPre=/bin/sh -c 'aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${registry}'
 ExecStartPre=/usr/bin/docker pull ${image}
 ExecStartPre=-/usr/bin/docker rm -f ${service_name}
-ExecStart=/usr/bin/docker run --rm --name ${service_name} --network host --log-opt max-size=10m --log-opt max-file=3 --env-file /etc/${service_name}/environment -v /data:/data ${image}
+ExecStart=/usr/bin/docker run --rm --name ${service_name} --network host --log-opt max-size=10m --log-opt max-file=3 --env-file /etc/${service_name}/environment -v /data:/data -v /etc/${service_name}/root-ca.pem:/etc/${service_name}/root-ca.pem:ro ${image}
 ExecStop=/usr/bin/docker stop ${service_name}
 Restart=always
 RestartSec=30

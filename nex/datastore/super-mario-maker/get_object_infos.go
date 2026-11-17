@@ -40,6 +40,7 @@ func GetObjectInfos(err error, packet nex.PacketInterface, callID uint32, dataID
 		info.DataID = objectInfo.DataID
 		info.GetInfo.URL = types.NewString(URL.String())
 		info.GetInfo.Size = objectInfo.Size
+		info.GetInfo.RootCACert = types.NewBuffer(globals.FileRootCA)
 		info.GetInfo.DataID = objectInfo.DataID
 
 		pInfos = append(pInfos, info)

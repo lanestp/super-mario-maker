@@ -98,6 +98,9 @@ locals {
     # for a new certificate, which Let's Encrypt only allows so often
     PN_SMM_ACCOUNT_HTTP_TLS_CACHE  = "/data/certificates"
     PN_SMM_ACCOUNT_HTTP_TLS_LEGACY = tostring(var.legacy_tls)
+    # A game checks the server against the root it is handed, and not
+    # against a list of its own
+    PN_SMM_FILE_ROOT_CA = "/etc/${var.name}/root-ca.pem"
   } : {}
 }
 
@@ -123,6 +126,7 @@ resource "aws_instance" "server" {
     data_volume  = replace(aws_ebs_volume.data.id, "-", "")
     environment  = merge(local.server_environment, local.tls_environment)
     service_name = var.name
+    root_ca      = file("${path.module}/${var.root_ca_file}")
   })
 
   metadata_options {

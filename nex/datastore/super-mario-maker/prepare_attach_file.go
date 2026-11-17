@@ -54,6 +54,7 @@ func PrepareAttachFile(err error, packet nex.PacketInterface, callID uint32, par
 
 	pReqPostInfo.DataID = dataID
 	pReqPostInfo.URL = types.NewString(URL.String())
+	pReqPostInfo.RootCACert = types.NewBuffer(globals.FileRootCA)
 	pReqPostInfo.FormFields = make(types.List[datastore_types.DataStoreKeyValue], 0, len(formData))
 
 	for key, value := range formData {

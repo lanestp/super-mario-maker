@@ -277,6 +277,22 @@ func configureFileProxy() {
 		LogError: func(err error) { globals.Logger.Error(err.Error()) },
 	}
 
+	// * A game checks the server it is sent to for files against the
+	// * certificate it is handed, and nothing else
+	if rootPath := strings.TrimSpace(os.Getenv("PN_SMM_FILE_ROOT_CA")); rootPath != "" {
+		data, err := os.ReadFile(rootPath)
+		if err == nil {
+			globals.FileRootCA, err = globals.ParseRootCA(data)
+		}
+
+		if err != nil {
+			globals.Logger.Errorf("PN_SMM_FILE_ROOT_CA can not be used: %s", err.Error())
+			os.Exit(1)
+		}
+	} else if parsed.Scheme == "https" {
+		globals.Logger.Warning("Files are served over HTTPS, but PN_SMM_FILE_ROOT_CA is not set. A game will refuse the server's certificate, as it has not been told which root to trust")
+	}
+
 	globals.Presigner = proxy
 	globals.AccountAPI.Files = proxy.Handler()
 	globals.AccountAPI.FilesPath = fileproxy.Path

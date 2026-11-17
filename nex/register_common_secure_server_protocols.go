@@ -55,6 +55,8 @@ func registerCommonSecureProtocols() {
 	// * The links games are given are made by this server's own
 	// * presigner, which may point them at the server and not at S3
 	commonDataStoreProtocol.S3Presigner = globals.Presigner
+	// * Handed to a game with every link, to check the server against
+	commonDataStoreProtocol.RootCACert = globals.FileRootCA
 	commonDataStoreProtocol.SetDataKeyBase(os.Getenv("PN_SMM_CONFIG_S3_KEY_BASE"))
 
 	commonDataStoreProtocol.GetObjectInfoByDataID = globals.Store.GetObjectInfoByDataID

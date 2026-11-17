@@ -27,7 +27,8 @@ func GetObjectInfos(err error, packet nex.PacketInterface, callID uint32, dataID
 		}
 
 		bucket := os.Getenv("PN_SMM_CONFIG_S3_BUCKET")
-		key := fmt.Sprintf("%d.bin", objectInfo.DataID)
+		// * The same key the file is uploaded to and downloaded from elsewhere
+		key := fmt.Sprintf("%s/%d.bin", os.Getenv("PN_SMM_CONFIG_S3_KEY_BASE"), objectInfo.DataID)
 
 		URL, err := globals.Presigner.GetObject(bucket, key, time.Minute*15)
 		if err != nil {

@@ -51,6 +51,9 @@ type Store interface {
 	// * Super Mario Maker
 	GetUserCourseObjectIDs(ownerPID types.PID) (types.List[types.UInt64], *nex.Error)
 	GetRandomCoursesWithLimit(limit int) (types.List[datastore_smm_types.DataStoreCustomRankingResult], *nex.Error)
+	// GetRandomCoursesByFailureRate picks courses at random, as
+	// GetRandomCoursesWithLimit does, from those the filter allows
+	GetRandomCoursesByFailureRate(limit int, filter FailureRateFilter) (types.List[datastore_smm_types.DataStoreCustomRankingResult], *nex.Error)
 	GetCustomRankingsByDataIDs(applicationID types.UInt32, dataIDs types.List[types.UInt64]) types.List[datastore_smm_types.DataStoreCustomRankingResult]
 	// GetCustomRankingDataIDs lists the objects ranked for an application
 	// that can be handed out, highest score first. Objects with the same
@@ -70,4 +73,30 @@ type Store interface {
 	EnsureEventCourseMetadata(size uint64) error
 
 	Close() error
+}
+
+// The rating slots a game keeps on a course, as seen when a real game
+// played one: one play in slot 0, a clear in slot 2, attempts in slot 3
+// and deaths in slot 4. Each holds a running total
+const (
+	RatingSlotPlays    = 0
+	RatingSlotClears   = 2
+	RatingSlotAttempts = 3
+	RatingSlotFails    = 4
+)
+
+// FailureRateFilter picks courses by how often attempts at them fail,
+// which is how a game asks for courses of a difficulty. A course's
+// failure rate is the attempts that were not clears, as a whole percent
+// of all its attempts, rounded down
+type FailureRateFilter struct {
+	// MinPercent and MaxPercent are the failure rates allowed, both included
+	MinPercent int
+	MaxPercent int
+	// MinAttempts is how many attempts a course needs before its failure
+	// rate counts. Courses with fewer are never picked by rate
+	MinAttempts int
+	// Unrated picks only the courses with fewer than MinAttempts
+	// attempts instead, whatever their rate
+	Unrated bool
 }

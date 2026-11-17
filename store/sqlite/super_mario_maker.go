@@ -56,12 +56,44 @@ func (s *Store) GetRandomCoursesWithLimit(limit int) (types.List[datastore_smm_t
 
 	// * This sorts every available course, which is fine for the
 	// * amount of courses a server small enough to use SQLite has
-	rows, err := s.db.Query(`SELECT `+prefixedMetaInfoColumns+`, ranking.value
+	return s.randomCourses(`SELECT `+prefixedMetaInfoColumns+`, ranking.value
 		FROM objects object
 		JOIN object_custom_rankings ranking ON ranking.data_id = object.data_id AND ranking.application_id = 0
 		WHERE object.upload_completed=1 AND object.deleted=0 AND object.under_review=0
 		ORDER BY RANDOM()
 		LIMIT ?`, limit)
+}
+
+func (s *Store) GetRandomCoursesByFailureRate(limit int, filter store.FailureRateFilter) (types.List[datastore_smm_types.DataStoreCustomRankingResult], *nex.Error) {
+	if limit <= 0 {
+		return types.NewList[datastore_smm_types.DataStoreCustomRankingResult](), nil
+	}
+
+	limit = min(limit, store.MaxRandomCourses)
+
+	condition := `COALESCE(attempts.total_value, 0) >= ? AND
+		(attempts.total_value - COALESCE(clears.total_value, 0)) * 100 / attempts.total_value BETWEEN ? AND ?`
+	args := []any{store.RatingSlotAttempts, store.RatingSlotClears, filter.MinAttempts, filter.MinPercent, filter.MaxPercent, limit}
+
+	if filter.Unrated {
+		condition = `COALESCE(attempts.total_value, 0) < ?`
+		args = []any{store.RatingSlotAttempts, store.RatingSlotClears, filter.MinAttempts, limit}
+	}
+
+	return s.randomCourses(`SELECT `+prefixedMetaInfoColumns+`, ranking.value
+		FROM objects object
+		JOIN object_custom_rankings ranking ON ranking.data_id = object.data_id AND ranking.application_id = 0
+		LEFT JOIN object_ratings attempts ON attempts.data_id = object.data_id AND attempts.slot = ?
+		LEFT JOIN object_ratings clears ON clears.data_id = object.data_id AND clears.slot = ?
+		WHERE object.upload_completed=1 AND object.deleted=0 AND object.under_review=0 AND `+condition+`
+		ORDER BY RANDOM()
+		LIMIT ?`, args...)
+}
+
+func (s *Store) randomCourses(query string, args ...any) (types.List[datastore_smm_types.DataStoreCustomRankingResult], *nex.Error) {
+	courses := types.NewList[datastore_smm_types.DataStoreCustomRankingResult]()
+
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, unknownError(err)
 	}

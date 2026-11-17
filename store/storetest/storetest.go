@@ -50,6 +50,7 @@ func Run(t *testing.T, backend Backend) {
 		{"UserCourseObjectIDs", testUserCourseObjectIDs},
 		{"RandomCourses", testRandomCourses},
 		{"RandomCoursesSkipUnavailable", testRandomCoursesSkipUnavailable},
+		{"RandomCoursesByFailureRate", testRandomCoursesByFailureRate},
 		{"UnderReview", testUnderReview},
 		{"EventCourseMetadata", testEventCourseMetadata},
 		{"Accounts", testAccounts},
@@ -978,5 +979,82 @@ func testAccountsWithAGivenPID(t *testing.T, s store.Store, _ Backend) {
 
 	if next.PID <= given {
 		t.Errorf("an account made after PID %d was given got %d, want a higher one", given, next.PID)
+	}
+}
+
+func testRandomCoursesByFailureRate(t *testing.T, s store.Store, backend Backend) {
+	// * A course tried attempts times and cleared clears times
+	course := func(name string, attempts, clears int) types.UInt64 {
+		t.Helper()
+
+		dataID := createObject(t, s, objectOptions{owner: 1000, name: name, dataType: courseDataType, ratingSlots: 5})
+		mustSucceed(t, s.InsertOrUpdateCustomRanking(dataID, 0, 0))
+
+		for slot, total := range map[uint8]int{store.RatingSlotAttempts: attempts, store.RatingSlotClears: clears} {
+			if total > 0 {
+				if _, nexError := s.RateObjectWithPassword(dataID, types.UInt8(slot), types.Int32(total), 0); nexError != nil {
+					t.Fatal(nexError)
+				}
+			}
+		}
+
+		return dataID
+	}
+
+	easy := course("easy", 20, 18)           // * 10% fail
+	edge := course("edge", 100, 66)          // * 34% fail, the top of the easy range
+	justOver := course("just over", 100, 65) // * 35% fail
+	hard := course("hard", 50, 1)            // * 98% fail
+	neverCleared := course("never cleared", 30, 0)
+	fewTries := course("few tries", 9, 9) // * 0% fail, but not tried enough to count
+	untried := course("untried", 0, 0)
+	deletedEasy := course("deleted easy", 20, 20)
+	mustSucceed(t, s.DeleteObjectByDataID(deletedEasy))
+
+	picked := func(filter store.FailureRateFilter) map[types.UInt64]bool {
+		t.Helper()
+
+		courses, nexError := s.GetRandomCoursesByFailureRate(100, filter)
+		mustSucceed(t, nexError)
+
+		found := map[types.UInt64]bool{}
+		for _, course := range courses {
+			if found[course.MetaInfo.DataID] {
+				t.Errorf("course %d was picked twice", course.MetaInfo.DataID)
+			}
+
+			found[course.MetaInfo.DataID] = true
+
+			if len(course.MetaInfo.Ratings) == 0 {
+				t.Errorf("course %d was picked without its ratings", course.MetaInfo.DataID)
+			}
+		}
+
+		return found
+	}
+
+	same := func(what string, got map[types.UInt64]bool, want ...types.UInt64) {
+		t.Helper()
+
+		if len(got) != len(want) {
+			t.Errorf("%s: picked %v, want %v", what, got, want)
+			return
+		}
+
+		for _, dataID := range want {
+			if !got[dataID] {
+				t.Errorf("%s: picked %v, want %v", what, got, want)
+				return
+			}
+		}
+	}
+
+	same("easy", picked(store.FailureRateFilter{MinPercent: 0, MaxPercent: 34, MinAttempts: 10}), easy, edge)
+	same("normal, as 100 Mario asks", picked(store.FailureRateFilter{MinPercent: 0, MaxPercent: 74, MinAttempts: 10}), easy, edge, justOver)
+	same("super expert", picked(store.FailureRateFilter{MinPercent: 96, MaxPercent: 100, MinAttempts: 10}), hard, neverCleared)
+	same("not tried enough to count", picked(store.FailureRateFilter{MinAttempts: 10, Unrated: true}), fewTries, untried)
+
+	if few, nexError := s.GetRandomCoursesByFailureRate(1, store.FailureRateFilter{MinPercent: 0, MaxPercent: 100, MinAttempts: 10}); nexError != nil || len(few) != 1 {
+		t.Errorf("asking for 1 course gave %d (%v)", len(few), nexError)
 	}
 }

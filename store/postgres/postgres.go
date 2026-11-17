@@ -104,6 +104,10 @@ func (Store) GetRandomCoursesWithLimit(limit int) (types.List[datastore_smm_type
 	return datastore_smm_db.GetRandomCoursesWithLimit(limit)
 }
 
+func (Store) GetRandomCoursesByFailureRate(limit int, filter store.FailureRateFilter) (types.List[datastore_smm_types.DataStoreCustomRankingResult], *nex.Error) {
+	return datastore_smm_db.GetRandomCoursesByFailureRate(limit, filter)
+}
+
 func (Store) GetCustomRankingsByDataIDs(applicationID types.UInt32, dataIDs types.List[types.UInt64]) types.List[datastore_smm_types.DataStoreCustomRankingResult] {
 	return datastore_smm_db.GetCustomRankingsByDataIDs(applicationID, dataIDs)
 }

@@ -217,3 +217,46 @@ func attachCourseRatings(courses types.List[datastore_super_mario_maker_types.Da
 
 	return courses, nil
 }
+
+// * Like allRandomCoursesQuery, for the courses whose failure rate is in
+// * a range. It sorts every course that qualifies, which is fine while a
+// * server has tens of thousands of courses
+const failureRateCoursesQuery = `
+	SELECT` + randomCourseColumns + `,
+		ranking.value
+	FROM datastore.objects object
+	JOIN datastore.object_custom_rankings ranking
+	ON
+		object.data_id = ranking.data_id AND
+		ranking.application_id = 0
+	LEFT JOIN datastore.object_ratings attempts ON attempts.data_id = object.data_id AND attempts.slot = $1
+	LEFT JOIN datastore.object_ratings clears ON clears.data_id = object.data_id AND clears.slot = $2
+	WHERE
+		object.upload_completed = TRUE AND
+		object.deleted = FALSE AND
+		object.under_review = FALSE AND
+		CASE WHEN $3 THEN
+			COALESCE(attempts.total_value, 0) < $4
+		ELSE
+			COALESCE(attempts.total_value, 0) >= $4 AND
+			(attempts.total_value - COALESCE(clears.total_value, 0)) * 100 / NULLIF(attempts.total_value, 0) BETWEEN $5 AND $6
+		END
+	ORDER BY RANDOM()
+	LIMIT $7`
+
+// GetRandomCoursesByFailureRate picks courses at random from those the filter allows
+func GetRandomCoursesByFailureRate(limit int, filter store.FailureRateFilter) (types.List[datastore_super_mario_maker_types.DataStoreCustomRankingResult], *nex.Error) {
+	if limit <= 0 {
+		return types.NewList[datastore_super_mario_maker_types.DataStoreCustomRankingResult](), nil
+	}
+
+	limit = min(limit, MaxRandomCourses)
+
+	courses, nexError := queryRandomCourses(failureRateCoursesQuery,
+		store.RatingSlotAttempts, store.RatingSlotClears, filter.Unrated, filter.MinAttempts, filter.MinPercent, filter.MaxPercent, limit)
+	if nexError != nil {
+		return nil, nexError
+	}
+
+	return attachCourseRatings(courses)
+}

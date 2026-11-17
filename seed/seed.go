@@ -306,6 +306,32 @@ func (s *Seeder) finishObject(dataID uint64, ratingSlots int) error {
 	return nil
 }
 
+// * The record of a course that holds who cleared it first and who
+// * cleared it fastest. A real game was seen to store a clear time here in
+// * thousandths of a second. A game shows "first clear" for a course
+// * that has no record
+const clearRecordSlot = 0
+
+// ClearRecord gives a course a first clear by one player and a world
+// record by another, the way two games clearing it would. The times are
+// made up: the first clear takes between 30 and 300 seconds, and the
+// record is faster. Use it only for courses whose numbers say they have
+// been cleared
+func (s *Seeder) ClearRecord(course uint64, first, fastest types.PID) error {
+	firstTime := 30_000 + s.Random.IntN(270_000)
+	recordTime := firstTime - 1 - s.Random.IntN(firstTime/3)
+
+	if nexError := s.Store.InsertOrUpdateCourseRecord(types.UInt64(course), clearRecordSlot, first, types.Int32(firstTime)); nexError != nil {
+		return nexError
+	}
+
+	if nexError := s.Store.InsertOrUpdateCourseRecord(types.UInt64(course), clearRecordSlot, fastest, types.Int32(recordTime)); nexError != nil {
+		return nexError
+	}
+
+	return nil
+}
+
 // * The list on a maker object that holds the courses its maker starred.
 // * Each entry is the DataID of a course as 8 little endian bytes
 const starredCoursesSlot = 0

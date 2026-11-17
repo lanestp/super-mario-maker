@@ -120,6 +120,17 @@ func run(directory, miiFrom, prefix string, makerCount int, randomSeed uint64) e
 			return fmt.Errorf("%s: %w", name, err)
 		}
 
+		// * A course that has been cleared has a first clear and a
+		// * record, each by one of the made up makers
+		if stats.Clears > 0 {
+			first := makers[seeder.Random.IntN(len(makers))]
+			fastest := makers[seeder.Random.IntN(len(makers))]
+
+			if err := seeder.ClearRecord(dataID, first, fastest); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
+		}
+
 		// * Written after each course, so that stopping part way
 		// * through never adds a course twice
 		seeded[name] = dataID

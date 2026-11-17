@@ -541,3 +541,39 @@ func TestMakersAreRankedSoThatAGameShowsThem(t *testing.T) {
 		t.Errorf("after asking for the makers again the maker has %d stars, want 13", score)
 	}
 }
+
+// * A game shows "first clear" for every course that has no record
+func TestClearRecordSaysWhoClearedFirstAndWhoWasFastest(t *testing.T) {
+	s := newSetup(t)
+
+	pids, err := s.seeder.Makers("SeedMaker", 3, s.player)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	course, err := s.seeder.Course(courseFile(t, "Course"), pids[0], seed.Stats{Clears: 2, Attempts: 5, Fails: 3, Plays: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, nexError := s.store.GetCourseRecordByDataIDAndSlot(types.UInt64(course), 0); nexError == nil {
+		t.Fatal("a course has a record before anyone cleared it")
+	}
+
+	if err := s.seeder.ClearRecord(course, pids[1], pids[2]); err != nil {
+		t.Fatal(err)
+	}
+
+	record, nexError := s.store.GetCourseRecordByDataIDAndSlot(types.UInt64(course), 0)
+	if nexError != nil {
+		t.Fatal(nexError)
+	}
+
+	if record.FirstPID != pids[1] || record.BestPID != pids[2] {
+		t.Errorf("first clear by %d and record by %d, want %d and %d", record.FirstPID, record.BestPID, pids[1], pids[2])
+	}
+
+	if record.BestScore < 20_000 || record.BestScore >= 300_000 {
+		t.Errorf("the record time is %d thousandths of a second, want between 20 and 300 seconds", record.BestScore)
+	}
+}

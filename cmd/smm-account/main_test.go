@@ -147,6 +147,23 @@ func TestTheAccountCommandReadsThePasswordFromStandardInput(t *testing.T) {
 	}
 }
 
+func TestTheAccountCommandTakesAPipedPasswordWithoutALineEnding(t *testing.T) {
+	path := useDatabase(t)
+
+	if _, err := runWith(t, "piped-secret", "create", "PlayerOne"); err != nil {
+		t.Fatal(err)
+	}
+
+	account, err := openDatabase(t, path).GetAccountByUsername("PlayerOne")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := accounts.CheckPassword(account, "piped-secret"); err != nil {
+		t.Errorf("the account does not have the piped password: %v", err)
+	}
+}
+
 func TestTheAccountCommandNeedsAPassword(t *testing.T) {
 	path := useDatabase(t)
 

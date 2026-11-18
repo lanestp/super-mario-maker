@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -260,6 +261,19 @@ func TestTheGameServerSettingsAreRequiredAndChecked(t *testing.T) {
 			t.Errorf("got gRPC server port %d, want 50051", port)
 		}
 	})
+
+	t.Run("the lowest and highest ports", func(t *testing.T) {
+		for _, edge := range []string{"0", "65535"} {
+			startClean(t)
+			set(t, valid...)
+			set(t, "PN_SMM_AUTHENTICATION_SERVER_PORT", edge, "PN_SMM_SECURE_SERVER_PORT", edge, "PN_SMM_GRPC_SERVER_PORT", edge)
+
+			port, err := gameServerPortsFromEnv()
+			if err != nil || strconv.Itoa(port) != edge {
+				t.Errorf("ports of %s gave gRPC server port %d (%v), want them taken", edge, port, err)
+			}
+		}
+	})
 }
 
 func TestTheAccountServerIsRequiredWhenAccountsAreKeptThere(t *testing.T) {
@@ -319,6 +333,18 @@ func TestTheAccountAPIRefusesAPortOutsideOneTo65535(t *testing.T) {
 		set(t, "PN_SMM_ACCOUNT_HTTP_PORT", port)
 
 		wantError(t, configureAccountAPI(), "PN_SMM_ACCOUNT_HTTP_PORT is not a valid port. Expected 1-65535, got "+port)
+	}
+}
+
+func TestTheAccountAPITakesThePortsOneAnd65535(t *testing.T) {
+	for _, port := range []int{1, 65535} {
+		startClean(t)
+		setAccountAPI(t)
+		set(t, "PN_SMM_ACCOUNT_HTTP_PORT", strconv.Itoa(port))
+
+		if err := configureAccountAPI(); err != nil || globals.AccountAPI == nil || globals.AccountAPI.Port != port {
+			t.Errorf("port %d was not taken: %v", port, err)
+		}
 	}
 }
 
@@ -633,6 +659,16 @@ func TestFilesCanAlsoBeServedWithoutTLSOnAPortOfTheirOwn(t *testing.T) {
 
 	if globals.AccountAPI.PlainFilesPort != 8080 {
 		t.Errorf("files are served without TLS on port %d, want 8080", globals.AccountAPI.PlainFilesPort)
+	}
+
+	for _, port := range []int{1, 65535} {
+		startClean(t)
+		configuredAccountAPI(t)
+		set(t, "PN_SMM_FILE_BASE_URL", "http://203.0.113.7:8080", "PN_SMM_FILE_HTTP_PORT", strconv.Itoa(port))
+
+		if err := configureFileProxy(); err != nil || globals.AccountAPI.PlainFilesPort != port {
+			t.Errorf("port %d was not taken: %v", port, err)
+		}
 	}
 
 	for _, port := range []string{"0", "65536", "files"} {
@@ -955,6 +991,8 @@ func TestTheServerStartsWithEverythingSet(t *testing.T) {
 	}
 
 	for _, want := range []string{
+		// * It is started away from any .env file
+		"Error loading .env file",
 		"Using accounts stored in this servers database",
 		"Event course metadata object found and is up to date!",
 		"Games upload and download files through this server, at http://203.0.113.7:8443/v1/files",

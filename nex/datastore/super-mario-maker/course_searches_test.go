@@ -331,8 +331,39 @@ func TestRecommendedCoursesAreNeverMoreThanOneSearchMayHold(t *testing.T) {
 		addRankedCourse(t, server.store, object{ratingSlots: 1}, 0)
 	}
 
-	if got := recommended(t, store.MaxRandomCourses+50, courseWorldAll); len(got) != store.MaxRandomCourses {
-		t.Errorf("got %d courses, want no more than %d", len(got), store.MaxRandomCourses)
+	// * None of these has been tried, so a difficulty is made up from
+	// * courses not yet rated and then courses of any difficulty
+	for _, extraData := range []types.List[types.String]{courseWorldAll, oneHundredMarioEasy} {
+		if got := recommended(t, store.MaxRandomCourses+50, extraData); len(got) != store.MaxRandomCourses {
+			t.Errorf("%v gave %d courses, want no more than %d", extraData, len(got), store.MaxRandomCourses)
+		}
+	}
+}
+
+func TestRecommendedCoursesAreNoMoreThanAskedForWhenManyHaveNotBeenTriedEnough(t *testing.T) {
+	server := setUp(t)
+
+	inRange := addCourseFailing(t, server.store, 10)
+	for range 5 {
+		addCourse(t, server.store, 0, 0)
+	}
+
+	got := recommended(t, 3, oneHundredMarioEasy)
+	if len(got) != 3 || got[0] != inRange {
+		t.Errorf("got %v, want 3 courses starting with %d", got, inRange)
+	}
+}
+
+func TestAskingForNoRecommendedCoursesGivesNone(t *testing.T) {
+	server := setUp(t)
+
+	addCourseFailing(t, server.store, 10)
+	addCourse(t, server.store, 0, 0)
+
+	for _, extraData := range []types.List[types.String]{courseWorldAll, oneHundredMarioEasy} {
+		if got := recommended(t, 0, extraData); len(got) != 0 {
+			t.Errorf("%v gave %d courses, want none", extraData, len(got))
+		}
 	}
 }
 

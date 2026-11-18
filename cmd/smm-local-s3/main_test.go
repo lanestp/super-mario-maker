@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/johannesboyne/gofakes3"
 	"github.com/johannesboyne/gofakes3/backend/s3afero"
@@ -315,6 +316,31 @@ func TestAFormWithAFileNameIsPassedOnAsItWas(t *testing.T) {
 	}
 }
 
+func TestOnlyAFormPostedAsMultipartIsRewritten(t *testing.T) {
+	var got []byte
+
+	handler := nameUploadedFiles(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, _ = io.ReadAll(r.Body)
+	}))
+
+	// * Neither is a form a console uploads, so neither is read as one
+	for name, sent := range map[string]struct{ method, contentType string }{
+		"a form put":  {http.MethodPut, "multipart/form-data; boundary=x"},
+		"a file post": {http.MethodPost, "application/octet-stream"},
+	} {
+		request := httptest.NewRequest(sent.method, "/smm/courses/1.bin", strings.NewReader("not a form"))
+		request.Header.Set("Content-Type", sent.contentType)
+
+		got = nil
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+
+		if response.Code != http.StatusOK || string(got) != "not a form" {
+			t.Errorf("%s: answered %d and passed on %q, want it passed on as it was", name, response.Code, got)
+		}
+	}
+}
+
 func TestEachRequestIsPrintedWithoutItsQueryString(t *testing.T) {
 	handler := logRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.Copy(io.Discard, r.Body)
@@ -336,7 +362,8 @@ func TestEachRequestIsPrintedWithoutItsQueryString(t *testing.T) {
 
 func TestARefusedRequestIsPrintedWithWhatWasSentAndTheAnswer(t *testing.T) {
 	handler := logRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.Copy(io.Discard, r.Body)
+		// * Read a byte at a time, so that what is kept of it is kept in many parts
+		io.Copy(io.Discard, iotest.OneByteReader(r.Body))
 		http.Error(w, "policy refused", http.StatusForbidden)
 	}))
 
@@ -358,6 +385,22 @@ func TestARefusedRequestIsPrintedWithWhatWasSentAndTheAnswer(t *testing.T) {
 	// * Only the start of what was sent is printed
 	if !strings.Contains(printed, `[S3] refused request start: "`+strings.Repeat("x", maxLoggedBytes)+`"`) {
 		t.Errorf("did not print the first %d bytes sent", maxLoggedBytes)
+	}
+}
+
+func TestTheAnswerToABadRequestIsPrintedOnlyUpToItsLimit(t *testing.T) {
+	handler := logRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(strings.Repeat("a", maxLoggedBytes)))
+		w.Write([]byte("past the limit"))
+	}))
+
+	printed := printedBy(t, func() {
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/smm/courses/900000.bin", nil))
+	})
+
+	if !strings.Contains(printed, `[S3] answer: "`+strings.Repeat("a", maxLoggedBytes)+`"`) {
+		t.Errorf("did not print the first %d bytes of the answer, and only those. Printed:\n%s", maxLoggedBytes, printed)
 	}
 }
 

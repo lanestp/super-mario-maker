@@ -252,6 +252,33 @@ func TestARankingListsTheMostStarsFirst(t *testing.T) {
 	}
 }
 
+func TestARankingLeavesOutWhatWasNotAskedFor(t *testing.T) {
+	server := setUp(t)
+
+	addRankedCourse(t, server.store, object{tags: []string{"a"}, metaBinary: []byte{1}}, 4)
+
+	type kept struct{ tags, ratings, metaBinary, score int }
+
+	for option, want := range map[uint8]kept{
+		0x00:             {0, 0, 0, 0},
+		0x01:             {1, 0, 0, 0},
+		0x02:             {0, 5, 0, 0},
+		0x04:             {0, 0, 1, 0},
+		0x20:             {0, 0, 0, 4},
+		allResultOptions: {1, 5, 1, 4},
+	} {
+		rankings := customRanking(t, rankingParam(0, 0, 10, option))
+		if len(rankings) != 1 {
+			t.Fatalf("result option 0x%X gave %d rankings, want 1", option, len(rankings))
+		}
+
+		info := rankings[0].MetaInfo
+		if got := (kept{len(info.Tags), len(info.Ratings), len(info.MetaBinary), int(rankings[0].Score)}); got != want {
+			t.Errorf("result option 0x%X kept %+v, want %+v", option, got, want)
+		}
+	}
+}
+
 func TestARankingNeverListsMoreThanOneSearchMayHold(t *testing.T) {
 	server := setUp(t)
 

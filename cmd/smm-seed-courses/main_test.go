@@ -253,6 +253,53 @@ func TestSeedingAgainOnlyAddsTheFilesThatAreNew(t *testing.T) {
 	}
 }
 
+func TestOnlyACourseWithClearsIsGivenAFirstClearAndARecord(t *testing.T) {
+	s := newSetup(t)
+
+	for i := range 8 {
+		s.addFile(t, fmt.Sprintf("%c.bin", 'c'+i), fmt.Sprintf("Course %d", i+3))
+	}
+
+	if _, err := runPrinting(t, s.directory, "RealPlayer", 3, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	opened := s.open(t)
+	cleared, notCleared := 0, 0
+
+	for name, dataID := range s.seeded(t) {
+		ratings, nexError := opened.GetObjectRatingsWithSlotByDataID(types.UInt64(dataID))
+		if nexError != nil {
+			t.Fatalf("%s: %v", name, nexError)
+		}
+
+		clears := int64(-1)
+		for _, rating := range ratings {
+			if rating.Slot == types.Int8(store.RatingSlotClears) {
+				clears = int64(rating.Rating.TotalValue)
+			}
+		}
+
+		_, nexError = opened.GetCourseRecordByDataIDAndSlot(types.UInt64(dataID), 0)
+		hasRecord := nexError == nil
+
+		if clears > 0 {
+			cleared++
+		} else {
+			notCleared++
+		}
+
+		if hasRecord != (clears > 0) {
+			t.Errorf("%s has %d clears and a record: %v", name, clears, hasRecord)
+		}
+	}
+
+	// * The seed is fixed, so this only changes with how numbers are made up
+	if cleared == 0 || notCleared == 0 {
+		t.Fatalf("%d courses were cleared and %d were not, want some of each", cleared, notCleared)
+	}
+}
+
 func TestSeedingWithTheSameSeedMakesUpTheSameNumbers(t *testing.T) {
 	statistics := func(seedValue uint64) string {
 		s := newSetup(t)

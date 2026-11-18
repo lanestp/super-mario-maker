@@ -33,9 +33,11 @@ import (
 )
 
 // * An index of courses at positions 100 to 109, one per position, with
-// * IDs 5000 to 5009, and a Wayback Machine that has some of their files
+// * IDs 5000 to 5009, and a Wayback Machine that has some of their files.
+// * A test may move the last position on
 type archive struct {
 	mutex    sync.Mutex
+	last     int64
 	archived map[uint64]bool
 	asked    []int64
 	file     []byte
@@ -48,7 +50,7 @@ func (a *archive) index(w http.ResponseWriter, r *http.Request) {
 	a.asked = append(a.asked, position)
 	a.mutex.Unlock()
 
-	if position < 100 || position > 109 {
+	if position < 100 || position > a.last {
 		w.Write([]byte(`{"error":"No Random Level Found!"}`))
 		return
 	}
@@ -114,7 +116,7 @@ func newSetup(t *testing.T) *setup {
 		t.Fatal(err)
 	}
 
-	a := &archive{archived: map[uint64]bool{}, file: file}
+	a := &archive{archived: map[uint64]bool{}, file: file, last: 109}
 	for id := uint64(5000); id <= 5009; id++ {
 		a.archived[id] = id != 5003 && id != 5007
 	}
@@ -224,6 +226,36 @@ func TestAStepTakesAnEvenSample(t *testing.T) {
 
 	if !s.onServer(5000) || !s.onServer(5006) || s.onServer(5001) {
 		t.Error("the sample brought in the wrong courses")
+	}
+}
+
+func TestAWalkReportsHowFarItHasGotAfterEach25CoursesBroughtIn(t *testing.T) {
+	s := newSetup(t)
+	output := logged(t)
+
+	// * 20 more courses, all archived, so that the 25th of the 28
+	// * brought in is the one at position 126
+	s.archive.mutex.Lock()
+	s.archive.last = 129
+	for id := uint64(5010); id <= 5029; id++ {
+		s.archive.archived[id] = true
+	}
+	s.archive.mutex.Unlock()
+
+	// * Position 99 has no course, so nothing has been brought in after it
+	s.importer.walk(context.Background(), "test", 99, 129, 1, 0)
+
+	var reports []string
+	for _, line := range strings.Split(output.String(), "\n") {
+		// * After the date and time the log puts first
+		if at := strings.Index(line, " brought in, "); at >= 0 {
+			reports = append(reports, line[strings.LastIndex(line[:at], " ")+1:])
+		}
+	}
+
+	if len(reports) != 2 || !strings.HasPrefix(reports[0], "25 brought in, ") || !strings.HasSuffix(reports[0], "at position 126") ||
+		!strings.HasPrefix(reports[1], "28 brought in, ") || !strings.HasSuffix(reports[1], "at position 130") {
+		t.Errorf("reported %q, want after the 25th course at position 126 and once more at the end", reports)
 	}
 }
 
@@ -365,7 +397,7 @@ func TestPositionsWithoutACourseAreWalkedPast(t *testing.T) {
 
 func TestARunStoppedPartWayThroughAPositionDoesNotSaveIt(t *testing.T) {
 	s := newSetup(t)
-	logged(t)
+	output := logged(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -392,6 +424,11 @@ func TestARunStoppedPartWayThroughAPositionDoesNotSaveIt(t *testing.T) {
 
 	if position, _ := s.store.ImportCursor("test"); position != 0 {
 		t.Errorf("a stopped run saved position %d, want 100 asked for again next time", position)
+	}
+
+	// * It says where it stopped, which is where it carries on from
+	if !strings.Contains(output.String(), ", at position 100\n") {
+		t.Errorf("did not report stopping at position 100. Logged:\n%s", output)
 	}
 
 	// * Being stopped is not the course's fault, so it is not kept to retry
@@ -792,6 +829,30 @@ func TestACourseAlreadyOnTheServerIsNotFetchedAgain(t *testing.T) {
 
 	if s.importer.alreadyThere != 8 || s.importer.imported != 0 || s.importer.refused != 0 {
 		t.Errorf("already there %d, brought in %d, refused %d; want the 8 there found", s.importer.alreadyThere, s.importer.imported, s.importer.refused)
+	}
+}
+
+func TestAnAnswerFromTheImportServiceOutside200To299IsAnError(t *testing.T) {
+	for status, wantError := range map[int]bool{http.StatusOK: false, 299: false, http.StatusMultipleChoices: true, http.StatusBadRequest: true} {
+		service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(status)
+			w.Write([]byte(`{"position":42}`))
+		}))
+
+		i := &importer{client: service.Client(), service: service.URL}
+
+		position, err := i.cursor(context.Background(), "test")
+
+		service.Close()
+
+		if wantError {
+			want := fmt.Sprintf(`the import service answered %d: {"position":42}`, status)
+			if err == nil || err.Error() != want {
+				t.Errorf("%d: got %v, want %q", status, err, want)
+			}
+		} else if err != nil || position != 42 {
+			t.Errorf("%d: got position %d (%v), want 42", status, position, err)
+		}
 	}
 }
 

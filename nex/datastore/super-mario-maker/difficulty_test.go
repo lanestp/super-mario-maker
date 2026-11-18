@@ -25,6 +25,9 @@ func TestDifficultyFilterReadsWhatARealGameSends(t *testing.T) {
 		"100 Mario normal":          {extra("1", "0", "74", "", "0"), store.FailureRateFilter{MinPercent: 0, MaxPercent: 74, MinAttempts: MinAttemptsForDifficulty}},
 		"Course World normal":       {extra("1", "35", "74", "0", "0"), store.FailureRateFilter{MinPercent: 35, MaxPercent: 74, MinAttempts: MinAttemptsForDifficulty}},
 		"Course World super expert": {extra("1", "96", "100", "0", "0"), store.FailureRateFilter{MinPercent: 96, MaxPercent: 100, MinAttempts: MinAttemptsForDifficulty}},
+		// * The range is all that is read, so the rest may be left off
+		"only the range":   {extra("1", "0", "34"), store.FailureRateFilter{MinPercent: 0, MaxPercent: 34, MinAttempts: MinAttemptsForDifficulty}},
+		"a single percent": {extra("1", "50", "50", "0", "0"), store.FailureRateFilter{MinPercent: 50, MaxPercent: 50, MinAttempts: MinAttemptsForDifficulty}},
 	} {
 		got, byDifficulty := DifficultyFilter(try.extraData)
 		if !byDifficulty || got != try.want {
@@ -35,13 +38,15 @@ func TestDifficultyFilterReadsWhatARealGameSends(t *testing.T) {
 
 func TestDifficultyFilterTakesAnyCourseWhenNoDifficultyIsAskedFor(t *testing.T) {
 	for name, extraData := range map[string]types.List[types.String]{
-		"Course World all": extra("", "", "", "0", "0"),
-		"nothing":          extra(),
-		"too short":        extra("1", "0"),
-		"not numbers":      extra("1", "easy", "hard", "", "0"),
-		"upside down":      extra("1", "74", "35", "", "0"),
-		"over a hundred":   extra("1", "0", "150", "", "0"),
-		"a negative":       extra("1", "-5", "34", "", "0"),
+		"Course World all":     extra("", "", "", "0", "0"),
+		"nothing":              extra(),
+		"too short":            extra("1", "0"),
+		"not numbers":          extra("1", "easy", "hard", "", "0"),
+		"lowest not a number":  extra("1", "easy", "34", "", "0"),
+		"highest not a number": extra("1", "0", "hard", "", "0"),
+		"upside down":          extra("1", "74", "35", "", "0"),
+		"over a hundred":       extra("1", "0", "150", "", "0"),
+		"a negative":           extra("1", "-5", "34", "", "0"),
 	} {
 		if got, byDifficulty := DifficultyFilter(extraData); byDifficulty {
 			t.Errorf("%s: filtered by %+v, want any course", name, got)

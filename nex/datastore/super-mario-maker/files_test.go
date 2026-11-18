@@ -57,6 +57,17 @@ func TestObjectInfosGiveADownloadLinkForEachCourse(t *testing.T) {
 		}
 	}
 
+	wantLinksToLastFifteenMinutes(t, server)
+}
+
+// * Checks links were made, and that each was made to last 15 minutes
+func wantLinksToLastFifteenMinutes(t *testing.T, server *testServer) {
+	t.Helper()
+
+	if len(server.presigner.lifetimes) == 0 {
+		t.Error("no link was made")
+	}
+
 	for _, lifetime := range server.presigner.lifetimes {
 		if lifetime != 15*time.Minute {
 			t.Errorf("a link was made to last %s, want 15 minutes", lifetime)
@@ -231,6 +242,8 @@ func TestPreparingAnAttachedFileMakesAnObjectOwnedByTheCaller(t *testing.T) {
 	if totals := ratingTotals(stored.Ratings); len(totals) != 1 || totals[0] != 5 {
 		t.Errorf("stored ratings %v, want slot 0 starting at 5", totals)
 	}
+
+	wantLinksToLastFifteenMinutes(t, server)
 }
 
 func TestAttachedFilesMadeAfterAnImportGetIDsAboveNintendos(t *testing.T) {
@@ -344,6 +357,8 @@ func TestCompletingAnAttachedFileMakesItAvailableAndGivesItsLink(t *testing.T) {
 	if nexError := server.store.IsObjectAvailable(image); nexError != nil {
 		t.Errorf("the image is not available after completing it: %v", nexError)
 	}
+
+	wantLinksToLastFifteenMinutes(t, server)
 }
 
 func TestCompletingAnAttachedFileThatFailedIsRefused(t *testing.T) {

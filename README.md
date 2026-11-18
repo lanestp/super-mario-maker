@@ -165,6 +165,8 @@ The SQLite tests need nothing else. The Postgres tests are skipped unless `PN_SM
 $ PN_SMM_TEST_POSTGRES_URI="postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable" go test ./... -p 1
 ```
 
+To see how much of the code the tests run, including the server the end to end tests start, run `scripts/coverage.sh` with the same settings. It prints each package's coverage, worst first, and writes `build/coverage.html`
+
 ## Configuration
 All configuration options are handled via environment variables
 

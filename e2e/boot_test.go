@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -47,7 +48,16 @@ func serverBinary(t *testing.T) string {
 
 		binaryPath = filepath.Join(directory, "server")
 
-		build := exec.Command("go", "build", "-o", binaryPath, "..")
+		arguments := []string{"build", "-o", binaryPath}
+
+		// * With PN_SMM_E2E_COVERAGE set to a folder, the server is
+		// * built to count which of its code runs, and writes the
+		// * counts there when it stops (see scripts/coverage.sh)
+		if coverageDirectory() != "" {
+			arguments = append(arguments, "-cover", "-coverpkg=github.com/PretendoNetwork/super-mario-maker/...")
+		}
+
+		build := exec.Command("go", append(arguments, "..")...)
 		if output, err := build.CombinedOutput(); err != nil {
 			buildError = fmt.Errorf("building the server: %v\n%s", err, output)
 		}
@@ -120,6 +130,7 @@ type server struct {
 	command *exec.Cmd
 	output  *bytes.Buffer
 	exited  chan error
+	stopped chan struct{}
 }
 
 // * Starts the server with SQLite, its own accounts and the given S3
@@ -148,6 +159,7 @@ func startServerWith(t *testing.T, s3 *s3test.Server, filesThroughServer bool, s
 		S3:                 s3,
 		output:             &bytes.Buffer{},
 		exited:             make(chan error, 1),
+		stopped:            make(chan struct{}),
 	}
 
 	if setup != nil {
@@ -195,14 +207,30 @@ func startServerWith(t *testing.T, s3 *s3test.Server, filesThroughServer bool, s
 		started.command.Env = append(started.command.Env, "PN_SMM_FILE_BASE_URL=http://127.0.0.1:"+strconv.Itoa(started.AccountAPIPort))
 	}
 
+	if directory := coverageDirectory(); directory != "" {
+		started.command.Env = append(started.command.Env, "GOCOVERDIR="+directory)
+	}
+
 	if err := started.command.Start(); err != nil {
 		t.Fatalf("starting the server: %v", err)
 	}
 
-	go func() { started.exited <- started.command.Wait() }()
+	go func() {
+		err := started.command.Wait()
+		close(started.stopped)
+		started.exited <- err
+	}()
 
 	t.Cleanup(func() {
-		started.command.Process.Kill()
+		// * Asked to stop first, so a server built with -cover can
+		// * write its counts. Cut off if it has not stopped in time
+		started.command.Process.Signal(syscall.SIGTERM)
+
+		select {
+		case <-started.stopped:
+		case <-time.After(5 * time.Second):
+			started.command.Process.Kill()
+		}
 
 		if t.Failed() {
 			t.Logf("server output:\n%s", started.output.String())
@@ -391,4 +419,20 @@ func TestConsoleCanLogInAndFindTheGameServer(t *testing.T) {
 	if xmlField(t, nexToken, "nex_password") != account.NEXPassword || xmlField(t, nexToken, "pid") != strconv.Itoa(int(account.PID)) {
 		t.Errorf("got the wrong account details: %s", nexToken)
 	}
+}
+
+// * Where a server built with -cover writes its counts, from
+// * PN_SMM_E2E_COVERAGE. Empty when coverage is not being measured
+func coverageDirectory() string {
+	directory := os.Getenv("PN_SMM_E2E_COVERAGE")
+	if directory == "" {
+		return ""
+	}
+
+	absolute, err := filepath.Abs(directory)
+	if err != nil {
+		return directory
+	}
+
+	return absolute
 }

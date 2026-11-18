@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -55,6 +56,12 @@ func TestConsoleCanUploadAndDownloadACourse(t *testing.T) {
 	python := os.Getenv("PN_SMM_E2E_PYTHON")
 	if python == "" {
 		t.Skip("PN_SMM_E2E_PYTHON not set, skipping game protocol client test")
+	}
+
+	// * The tests run in e2e/, so a relative path such as the one the
+	// * README gives is taken from the repository root
+	if !filepath.IsAbs(python) && strings.Contains(python, "/") {
+		python = filepath.Join("..", python)
 	}
 
 	s3 := s3test.Start(t)

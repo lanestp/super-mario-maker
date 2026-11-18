@@ -137,7 +137,6 @@ func TestSuggestedCoursesNeedTheCurrentCourseAsANumber(t *testing.T) {
 }
 
 func TestSuggestedCoursesWithNoExtraDataAreRefusedWithoutCrashing(t *testing.T) {
-	t.Skip("BUG: SuggestedCourseSearchObject reads extraData[0] without checking its length, so a request with no extra data panics and, with nothing recovering, takes the whole server down")
 
 	setUp(t)
 

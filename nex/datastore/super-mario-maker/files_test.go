@@ -277,7 +277,6 @@ func TestPreparingAnAttachedFileFailsWhenTheStoreDoes(t *testing.T) {
 }
 
 func TestPreparingAnAttachedFileFailsCleanlyWhenNoUploadLinkCanBeMade(t *testing.T) {
-	t.Skip("BUG: PrepareAttachFile ignores the presigner's error and calls String on a nil URL, so the panic takes the whole server down (e.g. when PN_SMM_CONFIG_S3_BUCKET is empty)")
 
 	server := setUp(t)
 	server.presigner.failPost = true

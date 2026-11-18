@@ -26,6 +26,11 @@ func SuggestedCourseSearchObject(err error, packet nex.PacketInterface, callID u
 	// * does act as a filter of some kind? Maybe it has to
 	// * do with difficulty? Or ratings?
 
+	if len(extraData) == 0 {
+		globals.Logger.Error("A suggested course search came with no extra data")
+		return nil, nex.NewError(nex.ResultCodes.DataStore.InvalidArgument, "Invalid argument")
+	}
+
 	_, err = strconv.ParseUint(string(extraData[0]), 0, 64)
 	if err != nil {
 		globals.Logger.Error(err.Error())

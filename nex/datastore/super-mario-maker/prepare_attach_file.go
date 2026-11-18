@@ -48,7 +48,11 @@ func PrepareAttachFile(err error, packet nex.PacketInterface, callID uint32, par
 	key := fmt.Sprintf("%s/%d.jpg", key_base, dataID)
 
 	// TODO - Should this also take in the param.ContentType? To add it to the policy?
-	URL, formData, _ := globals.Presigner.PostObject(bucket, key, time.Minute*15)
+	URL, formData, err := globals.Presigner.PostObject(bucket, key, time.Minute*15)
+	if err != nil {
+		globals.Logger.Errorf("No upload link could be made for %s: %v", key, err)
+		return nil, nex.NewError(nex.ResultCodes.DataStore.OperationNotAllowed, "change_error")
+	}
 
 	pReqPostInfo := datastore_types.NewDataStoreReqPostInfo()
 

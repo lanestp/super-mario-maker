@@ -17,7 +17,7 @@ func CreateTables() {
 	_, err := Postgres.Exec(`CREATE SCHEMA IF NOT EXISTS datastore`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	globals.Logger.Success("datastore Postgres schema created")
@@ -49,7 +49,7 @@ func CreateTables() {
 	)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	// * "deletion_reason" and "under_review" are specific to SMM.
@@ -82,7 +82,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	// * Unsure what like half of this is but the client sends it so we saves it
@@ -103,7 +103,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	// * Custom rankings are specific to SMM
@@ -116,7 +116,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	// * BufferQueues are specific to SMM
@@ -129,7 +129,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	_, err = Postgres.Exec(`CREATE TABLE IF NOT EXISTS datastore.import_attempts (
@@ -142,7 +142,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	_, err = Postgres.Exec(`CREATE TABLE IF NOT EXISTS datastore.buffer_queues (
@@ -154,7 +154,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	// * Course records are specific to SMM
@@ -170,7 +170,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	// * Accounts are only used by servers which keep their own
@@ -178,7 +178,7 @@ func CreateTables() {
 	_, err = Postgres.Exec(`CREATE SCHEMA IF NOT EXISTS account`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	// * PIDs below 1800000000 are left free for the special accounts NEX itself uses
@@ -191,7 +191,7 @@ func CreateTables() {
 	)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	_, err = Postgres.Exec(`CREATE TABLE IF NOT EXISTS account.accounts (
@@ -206,7 +206,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	// * Only a hash of each token is stored
@@ -218,7 +218,7 @@ func CreateTables() {
 	)`)
 	if err != nil {
 		globals.Logger.Critical(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	globals.Logger.Success("Postgres tables created")
@@ -232,7 +232,7 @@ func EnsureEventCourseMetadata(objectSizeS3 uint64) {
 	err := Postgres.QueryRow(`SELECT EXISTS(SELECT 1 FROM datastore.objects WHERE data_id=900000) AS "exists"`).Scan(&exists)
 	if err != nil {
 		globals.Logger.Errorf("Error querying for event course metadata object in Postgres: %s", err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	now := time.Now()
@@ -305,7 +305,7 @@ func EnsureEventCourseMetadata(objectSizeS3 uint64) {
 		).Scan(&dataID)
 		if err != nil {
 			globals.Logger.Errorf("Error creating event course metadata object: %s", err.Error())
-			os.Exit(0)
+			os.Exit(1)
 		}
 	} else {
 		var objectSizeDB uint32
@@ -313,7 +313,7 @@ func EnsureEventCourseMetadata(objectSizeS3 uint64) {
 		err := Postgres.QueryRow(`SELECT size FROM datastore.objects WHERE data_id=900000`).Scan(&objectSizeDB)
 		if err != nil {
 			globals.Logger.Errorf("Error querying event course metadata object size: %s", err.Error())
-			os.Exit(0)
+			os.Exit(1)
 		}
 
 		if objectSizeS3 != uint64(objectSizeDB) {
@@ -322,7 +322,7 @@ func EnsureEventCourseMetadata(objectSizeS3 uint64) {
 			_, err := Postgres.Exec(`UPDATE datastore.objects SET size=$1, update_date=$2 WHERE data_id=900000`, objectSizeS3, now)
 			if err != nil {
 				globals.Logger.Errorf("Error updating event course metadata object size: %s", err.Error())
-				os.Exit(0)
+				os.Exit(1)
 			}
 		} else {
 			globals.Logger.Success("Event course metadata object found in Postgres!")
@@ -333,7 +333,7 @@ func EnsureEventCourseMetadata(objectSizeS3 uint64) {
 		_, err = Postgres.Exec(`UPDATE datastore.objects SET delete_permission=3 WHERE data_id=900000`)
 		if err != nil {
 			globals.Logger.Errorf("Error updating event course metadata object delete permission: %s", err.Error())
-			os.Exit(0)
+			os.Exit(1)
 		}
 	}
 

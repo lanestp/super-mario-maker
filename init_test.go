@@ -1012,7 +1012,6 @@ func TestTheServerDoesNotStartWithASettingRefused(t *testing.T) {
 }
 
 func TestTheServerEndsWithAFailureCodeWhenASettingIsRefused(t *testing.T) {
-	t.Skip("BUG: a missing or invalid port, host or account server setting ends start-up with exit code 0, so a supervisor sees a clean stop and does not restart or report it")
 
 	startClean(t)
 	setEverything(t)

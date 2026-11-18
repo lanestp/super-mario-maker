@@ -59,7 +59,7 @@ func configure() {
 	_, err = rand.Read(kerberosPassword)
 	if err != nil {
 		globals.Logger.Error("Error generating Kerberos password")
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	globals.KerberosPassword = string(kerberosPassword)
@@ -70,7 +70,7 @@ func configure() {
 	globals.GRPCServerPort, err = gameServerPortsFromEnv()
 	if err != nil {
 		globals.Logger.Error(err.Error())
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	if strings.TrimSpace(gRPCAPIKey) == "" {
@@ -83,7 +83,7 @@ func configure() {
 	} else {
 		if err := checkAccountServerFromEnv(); err != nil {
 			globals.Logger.Error(err.Error())
-			os.Exit(0)
+			os.Exit(1)
 		}
 
 		if strings.TrimSpace(accountGRPCAPIKey) == "" {
@@ -93,7 +93,7 @@ func configure() {
 		globals.GRPCAccountClientConnection, err = grpc.NewClient(fmt.Sprintf("%s:%s", accountGRPCHost, accountGRPCPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			globals.Logger.Criticalf("Failed to connect to account gRPC server: %v", err)
-			os.Exit(0)
+			os.Exit(1)
 		}
 
 		globals.GRPCAccountClient = pb.NewAccountClient(globals.GRPCAccountClientConnection)

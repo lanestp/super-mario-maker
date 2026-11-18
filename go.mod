@@ -8,6 +8,7 @@ require (
 	github.com/PretendoNetwork/nex-protocols-common-go/v2 v2.2.2
 	github.com/PretendoNetwork/nex-protocols-go/v2 v2.2.1
 	github.com/PretendoNetwork/plogger-go v1.1.0
+	github.com/fergusstrange/embedded-postgres v1.34.0
 	github.com/johannesboyne/gofakes3 v1.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
@@ -39,6 +40,7 @@ require (
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/ryszard/goskiplist v0.0.0-20150312221310-2dfbae5fcf46 // indirect
 	github.com/superwhiskers/crunch/v3 v3.5.7 // indirect
+	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	go.shabbyrobe.org/gocovmerge v0.0.0-20230507111327-fa4f82cfbf4d // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/mod v0.42.0 // indirect

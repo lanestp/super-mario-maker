@@ -10,7 +10,6 @@ import (
 	"github.com/PretendoNetwork/super-mario-maker/store/storetest"
 )
 
-// * Skipped unless PN_SMM_TEST_POSTGRES_URI is set. See the dbtest package
 func TestStore(t *testing.T) {
 	storetest.Run(t, storetest.Backend{
 		Open: func(t *testing.T) store.Store {

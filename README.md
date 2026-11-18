@@ -159,7 +159,7 @@ $ e2e/client/setup.sh
 $ PN_SMM_E2E_PYTHON=e2e/client/.venv/bin/python go test ./e2e/
 ```
 
-The SQLite tests need nothing else. The Postgres tests are skipped unless `PN_SMM_TEST_POSTGRES_URI` is set to a Postgres server the tests may create and drop databases on, for example
+The Postgres tests need nothing installed or running either. The first one in a package starts a Postgres of its own, from binaries downloaded once (about 30 MB, kept in `~/.embedded-postgres-go` and unpacked into your cache folder), and stops it when the package's tests finish. To run them against a Postgres server of your own instead, set `PN_SMM_TEST_POSTGRES_URI` to one the tests may create and drop databases on, for example
 
 ```bash
 $ PN_SMM_TEST_POSTGRES_URI="postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable" go test ./... -p 1

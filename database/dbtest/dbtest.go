@@ -1,7 +1,14 @@
 // Package dbtest provides a throwaway Postgres database for tests.
 //
-// Tests which use it are skipped unless PN_SMM_TEST_POSTGRES_URI is set to the
-// URI of a Postgres server the tests may create and drop databases on, such as
+// Nothing needs to be installed or running. The first test that asks for
+// a database starts a Postgres of its own for the package's tests, from
+// binaries downloaded once and kept in ~/.embedded-postgres-go, and it is
+// stopped when they finish. A package that uses dbtest has
+//
+//	func TestMain(m *testing.M) { dbtest.Main(m) }
+//
+// To use a Postgres server of your own instead, set PN_SMM_TEST_POSTGRES_URI
+// to one the tests may create and drop databases on, such as
 // postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
 package dbtest
 
@@ -10,7 +17,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"net/url"
-	"os"
 	"testing"
 	"time"
 
@@ -26,10 +32,7 @@ import (
 func Open(t *testing.T) {
 	t.Helper()
 
-	adminURI := os.Getenv("PN_SMM_TEST_POSTGRES_URI")
-	if adminURI == "" {
-		t.Skip("PN_SMM_TEST_POSTGRES_URI not set, skipping database test")
-	}
+	adminURI := AdminURI(t)
 
 	if globals.Logger == nil {
 		globals.Logger = plogger.NewLogger()
@@ -53,7 +56,7 @@ func Open(t *testing.T) {
 
 	testURI, err := url.Parse(adminURI)
 	if err != nil {
-		t.Fatalf("parsing PN_SMM_TEST_POSTGRES_URI: %v", err)
+		t.Fatalf("parsing the test Postgres address: %v", err)
 	}
 
 	testURI.Path = "/" + name

@@ -121,7 +121,6 @@ func TestASQLiteFileThatCanNotBeMadeIsRefused(t *testing.T) {
 	}
 }
 
-// * Skipped unless PN_SMM_TEST_POSTGRES_URI is set. See the dbtest package
 func TestPostgresIsOpenedAtTheAddressGiven(t *testing.T) {
 	dbtest.Open(t)
 
@@ -134,7 +133,7 @@ func TestPostgresIsOpenedAtTheAddressGiven(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	address, err := url.Parse(os.Getenv("PN_SMM_TEST_POSTGRES_URI"))
+	address, err := url.Parse(dbtest.AdminURI(t))
 	if err != nil {
 		t.Fatal(err)
 	}

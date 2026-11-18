@@ -6,11 +6,10 @@
 #
 #   scripts/coverage.sh
 #
-# The game protocol client test and the Postgres tests only count when
-# they are set up, as for go test (see "Testing" in the README):
+# The game protocol client test only counts when it is set up, as for
+# go test (see "Testing" in the README):
 #
 #   PN_SMM_E2E_PYTHON=e2e/client/.venv/bin/python
-#   PN_SMM_TEST_POSTGRES_URI=postgres://...
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -20,10 +19,8 @@ trap 'rm -rf "$counts"' EXIT
 mkdir "$counts/tests" "$counts/server"
 
 [ -n "${PN_SMM_E2E_PYTHON:-}" ] || echo "PN_SMM_E2E_PYTHON is not set: the game protocol client test is skipped, so the handlers it reaches count less" >&2
-[ -n "${PN_SMM_TEST_POSTGRES_URI:-}" ] || echo "PN_SMM_TEST_POSTGRES_URI is not set: the Postgres tests are skipped, so the Postgres code counts as not run" >&2
 
-# * -p 1 because the Postgres tests share one server
-PN_SMM_E2E_COVERAGE="$counts/server" go test -p 1 -count=1 -cover -coverpkg=./... ./... -args -test.gocoverdir="$counts/tests" >"$counts/test-output" 2>&1 || {
+PN_SMM_E2E_COVERAGE="$counts/server" go test -count=1 -cover -coverpkg=./... ./... -args -test.gocoverdir="$counts/tests" >"$counts/test-output" 2>&1 || {
 	cat "$counts/test-output"
 	echo "The tests failed, so there is no coverage to report" >&2
 	exit 1

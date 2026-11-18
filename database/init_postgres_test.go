@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"net/url"
-	"os"
 	"testing"
 	"time"
 
@@ -15,8 +14,6 @@ import (
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 	"github.com/lib/pq"
 )
-
-// * Skipped unless PN_SMM_TEST_POSTGRES_URI is set. See the dbtest package
 
 type eventCourseMetadata struct {
 	owner, size, dataType, deletePermission, period int
@@ -112,10 +109,7 @@ func TestMadeCoursesComeAfterTheReservedDataIDs(t *testing.T) {
 }
 
 func TestConnectingToPostgresMakesTheTables(t *testing.T) {
-	adminURI := os.Getenv("PN_SMM_TEST_POSTGRES_URI")
-	if adminURI == "" {
-		t.Skip("PN_SMM_TEST_POSTGRES_URI not set, skipping database test")
-	}
+	adminURI := dbtest.AdminURI(t)
 
 	if globals.Logger == nil {
 		globals.Logger = plogger.NewLogger()

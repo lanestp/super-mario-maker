@@ -1,11 +1,14 @@
 package dbtest
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"testing"
@@ -62,14 +65,22 @@ func Main(m *testing.M) {
 }
 
 func start() {
-	runtime, startErr = os.MkdirTemp("", "smm-test-postgres-")
+	binaries, err := sharedBinaries()
+	if err != nil {
+		startErr = err
+		return
+	}
+
+	stopLeftovers(binaries)
+
+	runtime, startErr = os.MkdirTemp("", runtimePrefix)
 	if startErr != nil {
 		return
 	}
 
-	binaries, err := sharedBinaries()
-	if err != nil {
-		startErr = err
+	// * Which test process this Postgres belongs to, so a later run can
+	// * tell when it has been left behind
+	if startErr = os.WriteFile(filepath.Join(runtime, ownerFile), []byte(strconv.Itoa(os.Getpid())), 0o600); startErr != nil {
 		return
 	}
 
@@ -102,6 +113,45 @@ func start() {
 	}
 
 	startErr = startOnFreePort(binaries)
+}
+
+const (
+	runtimePrefix = "smm-test-postgres-"
+	ownerFile     = "owner"
+)
+
+// * A test process killed outright (by a timeout, kill -9, or a mutation
+// * tester) can not stop its Postgres, which keeps running and keeps its
+// * shared memory. Enough of them and no Postgres can start. So each
+// * start first stops those whose test process has gone, and removes
+// * their files
+func stopLeftovers(binaries string) {
+	runtimes, _ := filepath.Glob(filepath.Join(os.TempDir(), runtimePrefix+"*"))
+
+	for _, leftover := range runtimes {
+		owner, err := os.ReadFile(filepath.Join(leftover, ownerFile))
+		if err != nil {
+			continue
+		}
+
+		pid, err := strconv.Atoi(string(owner))
+		if err != nil || processIsRunning(pid) {
+			continue
+		}
+
+		dataDirectories, _ := filepath.Glob(filepath.Join(leftover, "*", "data"))
+		for _, data := range dataDirectories {
+			exec.Command(filepath.Join(binaries, "bin", "pg_ctl"), "stop", "-D", data, "-m", "immediate").Run()
+		}
+
+		os.RemoveAll(leftover)
+	}
+}
+
+func processIsRunning(pid int) bool {
+	err := syscall.Kill(pid, 0)
+
+	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 // * Where the Postgres binaries are unpacked, once for every test run

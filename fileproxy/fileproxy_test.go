@@ -399,3 +399,158 @@ func TestOnlyUploadsAndDownloadsAreServed(t *testing.T) {
 		t.Error("the file was changed")
 	}
 }
+
+func TestWithNoLimitSetTheDefaultLimitIsUsed(t *testing.T) {
+	s := newSetup(t)
+	s.proxy.MaxUploadBytes = 0
+
+	_, fields, _ := s.proxy.PostObject("", "courses/1.bin", time.Minute)
+
+	if status, answer := s.upload(t, fields, make([]byte, 2000)); status != http.StatusNoContent {
+		t.Errorf("a file of 2000 bytes answered %d, want 204: %s", status, answer)
+	}
+
+	if status, _ := s.upload(t, fields, make([]byte, DefaultMaxUploadBytes+1)); status != http.StatusRequestEntityTooLarge {
+		t.Errorf("a file one byte over the default limit answered %d, want 413", status)
+	}
+}
+
+// * A link signed for no file at all must not be usable for one
+func TestALinkForAnEmptyKeyIsRefused(t *testing.T) {
+	s := newSetup(t)
+	s.storage.files[""] = []byte("nameless")
+
+	_, fields, _ := s.proxy.PostObject("", "", time.Minute)
+
+	if status, _ := s.upload(t, fields, []byte("data")); status != http.StatusForbidden {
+		t.Errorf("an upload for an empty key answered %d, want 403", status)
+	}
+
+	if string(s.storage.files[""]) != "nameless" {
+		t.Error("an upload for an empty key was stored")
+	}
+
+	download, _ := s.proxy.GetObject("", "", time.Minute)
+
+	// * The link is made without the slash that ends an empty key, and
+	// * would not reach a download without it
+	download.Path = Path + "/"
+
+	if status, body, _ := get(t, download.String()); status != http.StatusForbidden || bytes.Contains(body, []byte("nameless")) {
+		t.Errorf("a download for an empty key answered %d with %q, want 403", status, body)
+	}
+}
+
+func TestTransfersThatWorkLogNothing(t *testing.T) {
+	s := newSetup(t)
+
+	var logged []error
+	s.proxy.LogError = func(err error) { logged = append(logged, err) }
+
+	_, fields, _ := s.proxy.PostObject("", "courses/1.bin", time.Minute)
+
+	if status, _ := s.upload(t, fields, []byte("data")); status != http.StatusNoContent {
+		t.Fatalf("upload answered %d", status)
+	}
+
+	download, _ := s.proxy.GetObject("", "courses/1.bin", time.Minute)
+
+	if status, body, _ := get(t, download.String()); status != http.StatusOK || string(body) != "data" {
+		t.Fatalf("download answered %d with %q", status, body)
+	}
+
+	if len(logged) != 0 {
+		t.Errorf("a working upload and download logged %v", logged)
+	}
+}
+
+// * Sends a form whose parts are given in order, as name and value
+func (s *setup) uploadParts(t *testing.T, contentType string, parts [][2]string) int {
+	t.Helper()
+
+	const boundary = "--------BOUNDARY--------45143351D5E385E3"
+
+	var body bytes.Buffer
+
+	for _, part := range parts {
+		body.WriteString("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + part[0] + "\"\r\n\r\n" + part[1] + "\r\n")
+	}
+
+	body.WriteString("--" + boundary + "--\r\n")
+
+	response, err := http.Post(s.server.URL+Path, contentType+"; boundary="+boundary, &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response.Body.Close()
+
+	return response.StatusCode
+}
+
+func TestAFormWithItsFileBeforeItsFieldsIsTaken(t *testing.T) {
+	s := newSetup(t)
+
+	_, fields, _ := s.proxy.PostObject("", "courses/1.bin", time.Minute)
+
+	status := s.uploadParts(t, "multipart/form-data", [][2]string{
+		{"file", "data"},
+		{"key", fields["key"]},
+		{"expires", fields["expires"]},
+		{"signature", fields["signature"]},
+	})
+	if status != http.StatusNoContent || string(s.storage.files["courses/1.bin"]) != "data" {
+		t.Errorf("answered %d and stored %q, want 204 and the file", status, s.storage.files["courses/1.bin"])
+	}
+}
+
+func TestAFormMayHave16FieldsBesidesTheFileAndNoMore(t *testing.T) {
+	s := newSetup(t)
+
+	_, fields, _ := s.proxy.PostObject("", "courses/1.bin", time.Minute)
+
+	form := func(fieldCount int) [][2]string {
+		parts := [][2]string{{"key", fields["key"]}, {"expires", fields["expires"]}, {"signature", fields["signature"]}}
+
+		for i := len(parts); i < fieldCount; i++ {
+			parts = append(parts, [2]string{"extra" + strconv.Itoa(i), "x"})
+		}
+
+		return append(parts, [2]string{"file", "data"})
+	}
+
+	if status := s.uploadParts(t, "multipart/form-data", form(17)); status != http.StatusBadRequest {
+		t.Errorf("17 fields answered %d, want 400", status)
+	}
+
+	if len(s.storage.files) != 0 {
+		t.Error("a form with 17 fields was stored")
+	}
+
+	if status := s.uploadParts(t, "multipart/form-data", form(16)); status != http.StatusNoContent {
+		t.Errorf("16 fields answered %d, want 204", status)
+	}
+}
+
+// * A boundary does not make something else a form
+func TestAnUploadThatIsNotAMultipartFormIsRefusedEvenWithABoundary(t *testing.T) {
+	s := newSetup(t)
+
+	_, fields, _ := s.proxy.PostObject("", "courses/1.bin", time.Minute)
+
+	for _, contentType := range []string{"text/plain", "multipart/mixed"} {
+		status := s.uploadParts(t, contentType, [][2]string{
+			{"key", fields["key"]},
+			{"expires", fields["expires"]},
+			{"signature", fields["signature"]},
+			{"file", "data"},
+		})
+		if status != http.StatusBadRequest {
+			t.Errorf("%s answered %d, want 400", contentType, status)
+		}
+	}
+
+	if len(s.storage.files) != 0 {
+		t.Error("something that is not a form was stored")
+	}
+}

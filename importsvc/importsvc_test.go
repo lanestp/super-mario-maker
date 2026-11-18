@@ -3,6 +3,7 @@ package importsvc_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -30,6 +31,14 @@ type setup struct {
 func newSetup(t *testing.T) *setup {
 	t.Helper()
 
+	return newSetupWith(t, nil, nil)
+}
+
+// * putFile, when given, stores course files in place of keeping them in
+// * the setup's files, and logError is the service's LogError
+func newSetupWith(t *testing.T, putFile func(key string, data []byte) error, logError func(error)) *setup {
+	t.Helper()
+
 	if globals.Logger == nil {
 		globals.Logger = plogger.NewLogger()
 	}
@@ -43,16 +52,21 @@ func newSetup(t *testing.T) *setup {
 
 	s := &setup{store: opened, files: map[string][]byte{}}
 
+	if putFile == nil {
+		putFile = func(key string, data []byte) error {
+			s.files[key] = data
+			return nil
+		}
+	}
+
 	handler, err := importsvc.Handler(importsvc.Config{
 		Token: "the-token",
 		Seeder: &seed.Seeder{
 			Store:   opened,
 			KeyBase: "courses",
-			PutFile: func(key string, data []byte) error {
-				s.files[key] = data
-				return nil
-			},
+			PutFile: putFile,
 		},
+		LogError: logError,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -318,5 +332,143 @@ func TestARunCarriesOnFromItsCursor(t *testing.T) {
 
 	if status, _ := call(http.MethodPut, `{"position":-5}`); status != http.StatusBadRequest {
 		t.Errorf("a negative position answered %d, want 400", status)
+	}
+
+	// * A run can be sent back to the start
+	if status, _ := call(http.MethodPut, `{"position":0}`); status != http.StatusNoContent {
+		t.Errorf("a position of 0 answered %d, want 204", status)
+	}
+
+	if status, answer := call(http.MethodGet, ""); status != http.StatusOK || answer != `{"position":0}` {
+		t.Errorf("after going back to the start, the cursor answered %d %s", status, answer)
+	}
+}
+
+func TestTheServiceIsNotMadeWithoutASeederAndAToken(t *testing.T) {
+	if _, err := importsvc.Handler(importsvc.Config{Token: "the-token"}); err == nil {
+		t.Error("a service with no seeder was made")
+	}
+
+	if _, err := importsvc.Handler(importsvc.Config{Seeder: &seed.Seeder{}}); err == nil {
+		t.Error("a service with no token was made")
+	}
+
+	if _, err := importsvc.Handler(importsvc.Config{Seeder: &seed.Seeder{}, Token: "the-token"}); err != nil {
+		t.Errorf("a service with a seeder and a token was refused: %v", err)
+	}
+}
+
+func TestStorageFailuresAreLoggedAndNothingElseIs(t *testing.T) {
+	failing := false
+	var logged []error
+
+	s := newSetupWith(t, func(string, []byte) error {
+		if failing {
+			return errors.New("storage is down")
+		}
+
+		return nil
+	}, func(err error) { logged = append(logged, err) })
+
+	if status, answer := s.send(t, "the-token", validCourse(), courseFile(t)); status != http.StatusCreated {
+		t.Fatalf("importing answered %d: %s", status, answer)
+	}
+
+	if len(logged) != 0 {
+		t.Errorf("a course that went in logged %v", logged)
+	}
+
+	failing = true
+
+	other := validCourse()
+	other.DataID = 37585839
+
+	if status, _ := s.send(t, "the-token", other, courseFile(t)); status != http.StatusInternalServerError {
+		t.Errorf("a storage failure answered %d, want 500", status)
+	}
+
+	if len(logged) != 1 {
+		t.Errorf("a storage failure logged %d errors, want 1", len(logged))
+	}
+}
+
+func TestAStorageFailureIsAnsweredWhenNothingIsToldAboutErrors(t *testing.T) {
+	s := newSetupWith(t, func(string, []byte) error { return errors.New("storage is down") }, nil)
+
+	if status, _ := s.send(t, "the-token", validCourse(), courseFile(t)); status != http.StatusInternalServerError {
+		t.Errorf("a storage failure answered %d, want 500", status)
+	}
+}
+
+func TestACourseWithNoRecordIsTaken(t *testing.T) {
+	s := newSetup(t)
+
+	course := validCourse()
+	course.Record = nil
+
+	if status, answer := s.send(t, "the-token", course, courseFile(t)); status != http.StatusCreated {
+		t.Errorf("a course with no record answered %d: %s", status, answer)
+	}
+}
+
+// * A form with a course file of the largest size is read, and
+// * so is checked. One with a much larger file is not read at all
+func TestACourseFileOfOneMebibyteIsReadAndALargerOneIsNot(t *testing.T) {
+	s := newSetup(t)
+
+	if status, answer := s.send(t, "the-token", validCourse(), make([]byte, 1<<20)); status != http.StatusUnprocessableEntity {
+		t.Errorf("a file of 1 MiB answered %d, want 422 for being checked and found not to be a course: %s", status, answer)
+	}
+
+	if status, _ := s.send(t, "the-token", validCourse(), make([]byte, 1<<20+64<<10)); status != http.StatusBadRequest {
+		t.Errorf("a file 64 KiB over 1 MiB answered %d, want 400", status)
+	}
+}
+
+func TestAttemptsToRetryKeepToTheMostTriesAndTheLimitAskedFor(t *testing.T) {
+	s := newSetup(t)
+
+	// * Course n has been tried n times
+	for dataID := range uint64(4) {
+		for range dataID + 1 {
+			if err := s.store.RecordImportAttempt(store.ImportAttempt{DataID: dataID + 1, Outcome: store.ImportFailed, Entry: []byte(`{}`)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	for query, want := range map[string]int{
+		"":              2,
+		"&max_tries=0":  2,
+		"&max_tries=-1": 2,
+		"&max_tries=1":  0,
+		"&max_tries=2":  1,
+		"&max_tries=5":  4,
+	} {
+		if got := s.attempts(t, "outcome=failed"+query); len(got) != want {
+			t.Errorf("%q listed %d attempts, want %d", query, len(got), want)
+		}
+	}
+
+	// * Enough courses, tried once, to fill more than the default limit of 100
+	for dataID := range uint64(101) {
+		if err := s.store.RecordImportAttempt(store.ImportAttempt{DataID: 1000 + dataID, Outcome: store.ImportFailed, Entry: []byte(`{}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for query, want := range map[string]int{
+		"":             100,
+		"&limit=0":     100,
+		"&limit=-1":    100,
+		"&limit=many":  100,
+		"&limit=1":     1,
+		"&limit=2":     2,
+		"&limit=10000": 105,
+		"&limit=10001": 100,
+	} {
+		if got := s.attempts(t, "outcome=failed&max_tries=5"+query); len(got) != want {
+			t.Errorf("%q listed %d attempts, want %d", query, len(got), want)
+		}
 	}
 }

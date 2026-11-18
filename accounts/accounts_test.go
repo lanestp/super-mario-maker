@@ -171,6 +171,42 @@ func TestCreateRejectsBadInput(t *testing.T) {
 	}
 }
 
+func TestAPasswordOf6To16CharactersIsTakenAndNoOtherLength(t *testing.T) {
+	s := openStore(t)
+
+	for username, password := range map[string]string{"PlayerSix": "sixchr", "PlayerSixteen": "sixteen_chars_ok"} {
+		account, err := accounts.Create(s, username, password, "")
+		if err != nil {
+			t.Fatalf("password %q was refused when making an account: %v", password, err)
+		}
+
+		if err := accounts.SetPassword(s, account.PID, password); err != nil {
+			t.Errorf("password %q was refused when set again: %v", password, err)
+		}
+	}
+
+	account, err := accounts.Create(s, "PlayerOne", "secret123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, password := range []string{"", "five5", "seventeen_chars__"} {
+		if err := accounts.SetPassword(s, account.PID, password); !errors.Is(err, accounts.ErrInvalidPassword) {
+			t.Errorf("setting password %q gave %v, want ErrInvalidPassword", password, err)
+		}
+	}
+
+	// * The refused passwords left the old one in place
+	stored, err := s.GetAccountByPID(account.PID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := accounts.CheckPassword(stored, "secret123"); err != nil {
+		t.Errorf("the old password no longer works: %v", err)
+	}
+}
+
 type ownedCourses map[types.PID]int
 
 func (o ownedCourses) GetUserCourseObjectIDs(pid types.PID) (types.List[types.UInt64], *nex.Error) {

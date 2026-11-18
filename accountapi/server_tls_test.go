@@ -208,6 +208,76 @@ func TestTLSConfigWithoutACertificate(t *testing.T) {
 	}
 }
 
+// * Giving only half of what TLS needs is a mistake, and must not quietly
+// * end up serving without TLS
+func TestACertificateWithoutAKeyOrAKeyWithoutACertificateIsRefused(t *testing.T) {
+	certificatePath, keyPath, _ := writeCertificate(t)
+
+	for what, server := range map[string]Server{
+		"a certificate without a key": {TLSCertificatePath: certificatePath},
+		"a key without a certificate": {TLSKeyPath: keyPath},
+	} {
+		if config, err := server.TLSConfig(); err == nil {
+			t.Errorf("%s gave %v and no error", what, config)
+		}
+	}
+}
+
+// * Writes a certificate for the domain the way the certificate manager
+// * keeps one it fetched: the key, then the certificate
+func writeCachedCertificate(t *testing.T, directory, domain string) {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: domain},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		DNSNames:     []string{domain},
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contents := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	contents = append(contents, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
+
+	// * Kept under the domain followed by +rsa, as it has an RSA key
+	if err := os.WriteFile(filepath.Join(directory, domain+"+rsa"), contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestACertificateKeptInTheCacheDirectoryIsUsedAfterARestart(t *testing.T) {
+	// * Should the cache not be read, the certificate would be fetched
+	// * again. This makes that fail at once instead of reaching Let's Encrypt
+	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+
+	directory := t.TempDir()
+	writeCachedCertificate(t, directory, "smm.example.com")
+
+	config, err := Server{TLSDomain: "smm.example.com", TLSCacheDirectory: directory, LegacyTLS: true}.TLSConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	certificate, err := config.GetCertificate(&tls.ClientHelloInfo{ServerName: "smm.example.com", CipherSuites: consoleCipher})
+	if err != nil {
+		t.Fatalf("the kept certificate was not used: %v", err)
+	}
+
+	if certificate.Leaf == nil || certificate.Leaf.Subject.CommonName != "smm.example.com" {
+		t.Errorf("got a certificate for %v, want the kept one", certificate.Leaf)
+	}
+}
+
 func TestTLSConfigForADomainFetchesItsOwnCertificate(t *testing.T) {
 	config, err := Server{TLSDomain: "smm.example.com", TLSCacheDirectory: t.TempDir(), LegacyTLS: true}.TLSConfig()
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/accounts"
@@ -145,6 +146,70 @@ func TestCemuBundleLogsInAsThePlayer(t *testing.T) {
 
 	if !strings.Contains(string(files["README.txt"]), "CemuPlayer01") {
 		t.Error("the README does not name the account to pick")
+	}
+}
+
+// * Cemu reads the Mii name as 11 UTF-16 characters, high byte first, of
+// * which at most 10 are the name
+func TestCemuBundleNamesTheMiiAfterThePlayer(t *testing.T) {
+	accountStore := openStore(t)
+
+	account, err := accounts.Create(accountStore, "CemuPlayer01", "a-password", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for username, want := range map[string]string{
+		// * Cut to "CemuPlayer"
+		"CemuPlayer01": "00430065006d0075" + "0050006c00610079" + "00650072" + "0000",
+		// * The bundle itself takes any name, so one with a character past one byte shows the order
+		"Player€": "0050006c00610079" + "00650072" + "20ac" + strings.Repeat("0000", 4),
+	} {
+		account.Username = username
+
+		archive, err := bundle.Cemu(account, "a-password", "https://smm.example.com")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		values := accountFileValues(unzip(t, archive)["mlc01/usr/save/system/act/80000001/account.dat"])
+
+		if values["MiiName"] != want {
+			t.Errorf("%s: got Mii name %q, want %q", username, values["MiiName"], want)
+		}
+	}
+}
+
+// * A certificate dated from now on can be refused by a clock a little
+// * behind, so they are dated from before now
+func TestCemuBundleCertificatesAreAlreadyValid(t *testing.T) {
+	accountStore := openStore(t)
+
+	account, err := accounts.Create(accountStore, "CemuPlayer01", "a-password", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	archive, err := bundle.Cemu(account, "a-password", "https://smm.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	madeBy := time.Now()
+
+	for name, data := range unzip(t, archive) {
+		if !strings.Contains(name, "/scerts/") {
+			continue
+		}
+
+		certificate, err := x509.ParseCertificate(data)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+
+		if !certificate.NotBefore.Before(madeBy) || !certificate.NotAfter.After(madeBy.AddDate(9, 0, 0)) {
+			t.Errorf("%s is valid from %v to %v, want from before now and for years", name, certificate.NotBefore, certificate.NotAfter)
+		}
 	}
 }
 

@@ -2,6 +2,7 @@ package accountapi_test
 
 import (
 	"encoding/xml"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -408,7 +409,19 @@ func TestMappedIDs(t *testing.T) {
 		t.Errorf("PID to username gave %+v", got)
 	}
 
+	// * Empty inputs are skipped, and at most 100 are answered
+	got = lookup("input_type=user_id&output_type=pid&input=PlayerOne,,PlayerTwo,")
+	if len(got) != 2 || got[0].Out != "1800000000" || got[1].Out != "1800000001" {
+		t.Errorf("usernames with empty ones between gave %+v", got)
+	}
+
+	if got = lookup("input_type=pid&output_type=user_id&input=" + strings.Repeat("1800000000,", 150)); len(got) != 100 {
+		t.Errorf("150 inputs gave %d outputs, want 100", len(got))
+	}
+
 	mustBeError(t, f.get("/v1/api/admin/mapped_ids?input_type=user_id&output_type=pid", accessToken), http.StatusBadRequest, "1600", "no input")
+	mustBeError(t, f.get("/v1/api/admin/mapped_ids?output_type=pid&input=PlayerOne", accessToken), http.StatusBadRequest, "1600", "no input type")
+	mustBeError(t, f.get("/v1/api/admin/mapped_ids?input_type=user_id&input=PlayerOne", accessToken), http.StatusBadRequest, "1600", "no output type")
 	mustBeError(t, f.get("/v1/api/admin/mapped_ids?input_type=user_id&output_type=pid&input=PlayerOne", ""), http.StatusBadRequest, "0002", "no token")
 }
 
@@ -441,6 +454,119 @@ func TestFailedLoginsAreLimited(t *testing.T) {
 
 	if result := f.loginAs("PlayerOne", password, f.account.PID); result.status != http.StatusOK {
 		t.Errorf("login after waiting gave status %d: %s", result.status, result.body)
+	}
+}
+
+// * Each new connection comes from another port, which must not
+// * count as another address
+func TestFailedLoginsAreCountedForAnAddressWhicheverConnectionTheyComeOn(t *testing.T) {
+	f := newFixture(t)
+
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+
+	login := func(password string) int {
+		t.Helper()
+
+		response, err := client.PostForm(f.server.URL+"/v1/api/oauth20/access_token/generate", url.Values{
+			"grant_type": {"password"},
+			"user_id":    {"PlayerOne"},
+			"password":   {password},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		response.Body.Close()
+
+		return response.StatusCode
+	}
+
+	for attempt := range 10 {
+		if status := login("wrongpass"); status != http.StatusBadRequest {
+			t.Fatalf("failed login %d gave status %d, want 400", attempt+1, status)
+		}
+	}
+
+	if status := login(password); status != http.StatusTooManyRequests {
+		t.Errorf("login on a new connection after 10 failures gave status %d, want 429", status)
+	}
+}
+
+// * Finding accounts fails, as when the database is down
+type brokenAccounts struct {
+	store.AccountStore
+}
+
+func (brokenAccounts) GetAccountByUsername(string) (store.Account, error) {
+	return store.Account{}, errors.New("the database is down")
+}
+
+func TestAFailureOnTheServerIsLoggedAndAnswered(t *testing.T) {
+	f := newFixture(t)
+
+	login := func(handler http.Handler) *httptest.ResponseRecorder {
+		t.Helper()
+
+		request := httptest.NewRequest(http.MethodPost, "/v1/api/oauth20/access_token/generate", strings.NewReader(url.Values{
+			"grant_type": {"password"},
+			"user_id":    {"PlayerOne"},
+			"password":   {password},
+		}.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+
+		return recorder
+	}
+
+	var logged []error
+
+	config := accountapi.Config{
+		Accounts:       brokenAccounts{f.store},
+		GameServerHost: "203.0.113.7",
+		GameServerPort: 6004,
+		GameServerIDs:  []string{"1018DB00"},
+		LogError:       func(err error) { logged = append(logged, err) },
+	}
+
+	handler, err := accountapi.Handler(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result := login(handler); result.Code != http.StatusInternalServerError || !strings.Contains(result.Body.String(), "<code>2001</code>") {
+		t.Errorf("a database failure gave status %d: %s", result.Code, result.Body)
+	}
+
+	if len(logged) != 1 {
+		t.Errorf("a database failure logged %d errors, want 1", len(logged))
+	}
+
+	// * Without anywhere to log to, it is still answered
+	config.LogError = nil
+
+	handler, err = accountapi.Handler(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result := login(handler); result.Code != http.StatusInternalServerError {
+		t.Errorf("a database failure with nowhere to log it gave status %d", result.Code)
+	}
+}
+
+func TestAPortOf65535IsAcceptedAnd65536Refused(t *testing.T) {
+	f := newFixture(t)
+
+	config := accountapi.Config{Accounts: f.store, GameServerHost: "203.0.113.7", GameServerIDs: []string{"1018DB00"}}
+
+	for port, good := range map[int]bool{0: false, 1: true, 65535: true, 65536: false} {
+		config.GameServerPort = port
+
+		if err := config.Validate(); (err == nil) != good {
+			t.Errorf("port %d gave %v, want it accepted: %v", port, err, good)
+		}
 	}
 }
 

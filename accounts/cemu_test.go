@@ -145,6 +145,50 @@ func TestCemuAccountFileKeepsExistingSettings(t *testing.T) {
 	}
 }
 
+// * A Mii name holds at most 10 characters, and the 11th is always 0
+func TestCemuAccountFileCutsALongMiiNameTo10Characters(t *testing.T) {
+	s := openStore(t)
+
+	account, err := accounts.Create(s, "PlayerOne", "secret123", "ABCDEFGHIJKL")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contents, err := accounts.CemuAccountFile(nil, account, "secret123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// * "ABCDEFGHIJ" in UTF-16, then a 0
+	want := "004100420043004400450046004700480049004a" + "0000"
+
+	if got := parseCemuAccountFile(contents)["MiiName"]; got != want {
+		t.Errorf("got Mii name %q, want %q", got, want)
+	}
+}
+
+// * Each character takes 4 hexadecimal digits, so U+FFFF is the last one
+// * that fits. Anything past it is written as 0
+func TestCemuAccountFileKeepsMiiNameCharactersUpToFFFF(t *testing.T) {
+	s := openStore(t)
+
+	account, err := accounts.Create(s, "PlayerOne", "secret123", "A￿\U0001F600B")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contents, err := accounts.CemuAccountFile(nil, account, "secret123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "0041" + "ffff" + "0000" + "0042" + strings.Repeat("0000", 7)
+
+	if got := parseCemuAccountFile(contents)["MiiName"]; got != want {
+		t.Errorf("got Mii name %q, want %q", got, want)
+	}
+}
+
 func TestCemuAccountFileNeedsTheRightPassword(t *testing.T) {
 	s := openStore(t)
 

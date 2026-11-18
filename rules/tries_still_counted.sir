@@ -1,0 +1,17 @@
+UNIT tries_still_counted
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+FIDELITY spec
+ANCHOR this server's join page limit, set by the server's owner on 2026-11-17 ("100 per hour")
+SIG tries_still_counted(times: list[i64], now: i64) -> list[i64]
+ENVELOPE times is any list of moments, now is any moment; a moment is a whole number of milliseconds since 1970-01-01 UTC, and may be negative. times need not be in order and may repeat.
+DEPENDS-ON none
+DESCRIPTION Which of one address's earlier join tries still count against it.
+BEHAVIOR
+R1 A try at moment t still counts when now - t is less than WINDOW. A try exactly WINDOW before now no longer counts.
+R2 A try later than now (a clock that went back) still counts.
+R3 The answer is the tries that still count, in the order they came in times, repeats kept. No try that counts gives an empty list.
+PINNED const WINDOW = 3600000 CITED assumption the server's owner 2026-11-17: one hour, in milliseconds
+ORACLE value -> oracles/tries_still_counted.json CANONICAL-SHA256 66dc82aa7d7fd723a66f63e7913f221f7e77e192cc71b56245f4f0b22f953e4d
+NOTE rules written; no independent rebuild has been graded yet.
+PROVENANCE recorded by rdv from joinpage/tries_still_counted.go

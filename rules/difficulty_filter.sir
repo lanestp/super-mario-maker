@@ -1,0 +1,19 @@
+UNIT difficulty_filter
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+FIDELITY spec
+ANCHOR the extra data Super Mario Maker sends with a 100 Mario or Course World course search, measured from a real game 2026-11: Easy ["1","0","34","","0"], Normal ["1","0","74","","0"]; Course World's bands are 0-34, 35-74, 75-95 and 96-100
+SIG difficulty_filter(extra_data: list[text]) -> tuple[record[minPercent: i64, maxPercent: i64, minAttempts: i64, unrated: bool], bool]
+ENVELOPE extra_data is any list of text, the empty list included.
+DEPENDS-ON none
+DESCRIPTION Reads the failure-rate range a game asks for. The bool says whether a range was asked for; when it is false, any difficulty will do.
+BEHAVIOR
+R1 A range is asked for only when extra_data has at least 3 items and the first is exactly "1". CITED
+R2 The second and third items are the lowest and highest failure rate allowed, in percent, both included. Each is read as a whole number in base 10, with an optional leading "+" or "-"; anything else (empty text, spaces, a decimal point, letters) means no range.
+R3 No range either when the lowest is below 0, the highest is above 100, or the lowest is above the highest.
+R4 With a range, the answer is (minPercent = the lowest, maxPercent = the highest, minAttempts = MIN_ATTEMPTS, unrated = false) and true. Items after the third are not read.
+R5 With no range, the answer is (minPercent = 0, maxPercent = 0, minAttempts = 0, unrated = false) and false.
+PINNED const MIN_ATTEMPTS = 10 CITED assumption the server's owner 2026-11-17: a course cleared on its only two attempts should not count as the easiest there is
+ORACLE value -> oracles/difficulty_filter.json CANONICAL-SHA256 c0d774daaf099d3eedaa390d184cfc37f33abf6a3e07d5ccba2ab00ba604693a
+NOTE rules written; no independent rebuild has been graded yet.
+PROVENANCE recorded by rdv from nex/datastore/super-mario-maker/recommended_course_search_object.go

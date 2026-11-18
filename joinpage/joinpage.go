@@ -26,13 +26,12 @@ import (
 // Path is where the page is served
 const Path = "/join"
 
-// * How many tries one address gets, made or not, in Window. Joining is
-// * done once per player, so this is plenty, and it keeps someone who
-// * has the invite code from making accounts in bulk
-const (
-	MaxTries = 100
-	Window   = time.Hour
-)
+// Window is how long a try to join counts against an address. One
+// address gets MaxTries tries, made or not, in it. Joining is done once
+// per player, so this is plenty, and it keeps someone who has the
+// invite code from making accounts in bulk. The rules for both are in
+// rules/tries_still_counted.sir and rules/may_join.sir
+const Window = time.Duration(JoinWindowMilliseconds) * time.Millisecond
 
 //go:embed page.html
 var pageFiles embed.FS
@@ -283,44 +282,42 @@ func clientAddress(r *http.Request) string {
 	return host
 }
 
+// * Keeps when each address tried to join, in milliseconds since 1970
 type limiter struct {
 	mutex sync.Mutex
 	now   func() time.Time
-	tries map[string][]time.Time
+	tries map[string][]int64
 }
 
 func newLimiter(now func() time.Time) *limiter {
-	return &limiter{now: now, tries: map[string][]time.Time{}}
+	return &limiter{now: now, tries: map[string][]int64{}}
 }
 
 func (l *limiter) allow(address string) bool {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	now := l.now()
+	now := l.now().UnixMilli()
 
-	// * Forgets tries that are too old to count, for every address, so
-	// * the map does not grow for ever
-	for key, times := range l.tries {
-		kept := times[:0]
-		for _, at := range times {
-			if now.Sub(at) < Window {
-				kept = append(kept, at)
-			}
-		}
+	l.forgetOldTries(now)
 
-		if len(kept) == 0 {
-			delete(l.tries, key)
-		} else {
-			l.tries[key] = kept
-		}
-	}
-
-	if len(l.tries[address]) >= MaxTries {
+	if !MayJoin(int64(len(l.tries[address]))) {
 		return false
 	}
 
 	l.tries[address] = append(l.tries[address], now)
 
 	return true
+}
+
+// * Forgets the tries that no longer count, for every address, so the
+// * map does not grow for ever
+func (l *limiter) forgetOldTries(now int64) {
+	for address, times := range l.tries {
+		if counted := TriesStillCounted(times, now); len(counted) > 0 {
+			l.tries[address] = counted
+		} else {
+			delete(l.tries, address)
+		}
+	}
 }

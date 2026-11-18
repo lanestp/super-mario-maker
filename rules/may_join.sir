@@ -1,0 +1,15 @@
+UNIT may_join
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+FIDELITY spec
+ANCHOR this server's join page limit, set by the server's owner on 2026-11-17 ("100 per hour")
+SIG may_join(tries_still_counted: i64) -> bool
+ENVELOPE tries_still_counted is any whole number, 0 or more.
+DEPENDS-ON none
+DESCRIPTION Whether an address that has made this many tries that still count may try to join once more.
+BEHAVIOR
+R1 The answer is true when tries_still_counted is less than MAX_TRIES, and false otherwise. So the try that makes MAX_TRIES is allowed, and the one after it is not.
+PINNED const MAX_TRIES = 100 CITED assumption the server's owner 2026-11-17: "100 per hour"
+ORACLE value -> oracles/may_join.json CANONICAL-SHA256 9349a753a5516f098b6a73c49cf904c99cd56e52a24b6b4993d996db325de6dd
+NOTE rules written; no independent rebuild has been graded yet.
+PROVENANCE recorded by rdv from joinpage/may_join.go

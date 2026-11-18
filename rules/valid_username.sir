@@ -1,0 +1,16 @@
+UNIT valid_username
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+FIDELITY spec
+ANCHOR this server's own rule for usernames, chosen 2026-11 so a username fits a Mii name field and a URL without escaping
+SIG valid_username(username: text) -> none
+ENVELOPE username is any well-formed text.
+DEPENDS-ON none
+DESCRIPTION Whether a username can be used on this server.
+BEHAVIOR
+R1 A username is accepted, answering none, when it is 6 to 16 characters long and every character is an ASCII letter, a digit, ".", "-" or "_".
+R2 Anything else throws with exactly: username must be 6 to 16 characters, using only letters, numbers, dots, dashes and underscores
+R3 Case does not matter to whether it is accepted. Spaces, other punctuation and any character outside ASCII are refused, wherever they are.
+ORACLE value -> oracles/valid_username.json CANONICAL-SHA256 96adc9367fd0212b6d5c08eaf4714dd506b9737b637f10354d4e4b1bbdbbedae
+NOTE rules written; no independent rebuild has been graded yet.
+PROVENANCE recorded by rdv from accounts/accounts.go

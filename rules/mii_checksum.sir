@@ -1,0 +1,17 @@
+UNIT mii_checksum
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+FIDELITY spec
+ANCHOR CRC-16/XMODEM in the CRC RevEng catalogue (width 16, poly 0x1021, init 0x0000, no reflection, xorout 0x0000, check 0x31C3), the checksum the last two bytes of a Wii U Mii hold
+SIG mii_checksum(data: bytes) -> u64
+ENVELOPE data is any byte string, the empty one included.
+DEPENDS-ON none
+DESCRIPTION The checksum a Wii U Mii keeps in its last two bytes, computed over the bytes before them.
+BEHAVIOR
+R1 The answer is the CRC-16/XMODEM of data: polynomial 0x1021, starting value 0, bits taken most significant first, no reflection, nothing XORed at the end. CITED
+R2 The answer is always between 0 and 65535.
+R3 Empty data answers 0. The nine bytes of the text "123456789" answer 12739 (0x31C3). CITED
+R4 Appending the answer to data as two bytes, most significant first, gives data whose checksum is 0.
+PROVENANCE recorded by rdv from mii/mii.go
+ORACLE value -> oracles/mii_checksum.json CANONICAL-SHA256 cae9fcf02becb66f123d59136832cc5a55b6203d5644b8df94631b7ee0fdd107
+NOTE rules written; no independent rebuild has been graded yet.

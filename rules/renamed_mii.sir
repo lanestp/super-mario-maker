@@ -1,0 +1,18 @@
+UNIT renamed_mii
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+FIDELITY spec
+ANCHOR Wii U Mii data as stored by Super Mario Maker in a maker object: 96 bytes, Mii ID at offset 0x8, name at 0x1A, checksum in the last two bytes (measured from Miis a real game stored, 2026-11)
+SIG renamed_mii(original: bytes, name: text, id: u64) -> bytes
+ENVELOPE original is any byte string; name is any well-formed text; id is 0 to 4294967295.
+DEPENDS-ON mii_checksum
+DESCRIPTION A copy of a Mii with another name and ID, and its checksum redone so a game accepts it.
+BEHAVIOR
+R1 When original is not exactly 96 bytes long, the answer is original unchanged.
+R2 Otherwise the answer is 96 bytes: a copy of original with only the three fields of R3, R4 and R5 changed. original itself is never changed.
+R3 Bytes 0x8 to 0xB hold id, least significant byte first. CITED
+R4 Bytes 0x1A to 0x2D hold the name as 10 UTF-16 code units, each least significant byte first. A name longer than 10 code units keeps its first 10 (a character outside the Basic Multilingual Plane is two code units and may be cut in half); a shorter one is followed by zero units up to 10. CITED
+R5 The last two bytes hold mii_checksum of the first 94 bytes of the answer, most significant byte first. CITED
+ORACLE value -> oracles/renamed_mii.json CANONICAL-SHA256 bdb90a10fd20c68f1690731ff712cc2a750a95198e73f709d992171fbd70eea1
+NOTE rules written; no independent rebuild has been graded yet.
+PROVENANCE recorded by rdv from mii/mii.go

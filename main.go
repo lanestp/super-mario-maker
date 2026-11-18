@@ -12,6 +12,8 @@ import (
 var wg sync.WaitGroup
 
 func main() {
+	configure()
+
 	wg.Add(2)
 
 	go grpc.StartGRPCServer()

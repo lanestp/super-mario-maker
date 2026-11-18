@@ -13,6 +13,6 @@ R2 Otherwise the answer is 96 bytes: a copy of original with only the three fiel
 R3 Bytes 0x8 to 0xB hold id, least significant byte first. CITED
 R4 Bytes 0x1A to 0x2D hold the name as 10 UTF-16 code units, each least significant byte first. A name longer than 10 code units keeps its first 10 (a character outside the Basic Multilingual Plane is two code units and may be cut in half); a shorter one is followed by zero units up to 10. CITED
 R5 The last two bytes hold mii_checksum of the first 94 bytes of the answer, most significant byte first. CITED
-ORACLE value -> oracles/renamed_mii.json CANONICAL-SHA256 bdb90a10fd20c68f1690731ff712cc2a750a95198e73f709d992171fbd70eea1
-NOTE rules written; no independent rebuild has been graded yet.
 PROVENANCE recorded by rdv from mii/mii.go
+ORACLE value -> oracles/renamed_mii.json CANONICAL-SHA256 c5445d39172f94af85551e637eed5d4ae392e9bcdc435dc8807cd467eaa2866d
+NOTE rules written; no independent rebuild has been graded yet.

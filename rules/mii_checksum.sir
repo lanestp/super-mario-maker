@@ -13,5 +13,5 @@ R2 The answer is always between 0 and 65535.
 R3 Empty data answers 0. The nine bytes of the text "123456789" answer 12739 (0x31C3). CITED
 R4 Appending the answer to data as two bytes, most significant first, gives data whose checksum is 0.
 PROVENANCE recorded by rdv from mii/mii.go
-ORACLE value -> oracles/mii_checksum.json CANONICAL-SHA256 cae9fcf02becb66f123d59136832cc5a55b6203d5644b8df94631b7ee0fdd107
+ORACLE value -> oracles/mii_checksum.json CANONICAL-SHA256 72e2c749014e7dcb0023759a21be292a619b4309cfff9a57fca4e81b145352b4
 NOTE rules written; no independent rebuild has been graded yet.

@@ -14,6 +14,6 @@ R3 No range either when the lowest is below 0, the highest is above 100, or the 
 R4 With a range, the answer is (minPercent = the lowest, maxPercent = the highest, minAttempts = MIN_ATTEMPTS, unrated = false) and true. Items after the third are not read.
 R5 With no range, the answer is (minPercent = 0, maxPercent = 0, minAttempts = 0, unrated = false) and false.
 PINNED const MIN_ATTEMPTS = 10 CITED assumption the server's owner 2026-11-17: a course cleared on its only two attempts should not count as the easiest there is
-ORACLE value -> oracles/difficulty_filter.json CANONICAL-SHA256 c0d774daaf099d3eedaa390d184cfc37f33abf6a3e07d5ccba2ab00ba604693a
-NOTE rules written; no independent rebuild has been graded yet.
 PROVENANCE recorded by rdv from nex/datastore/super-mario-maker/recommended_course_search_object.go
+ORACLE value -> oracles/difficulty_filter.json CANONICAL-SHA256 1584ba8db2370d56daab5885d9bcc28da78c426c512bf6d31140c796a795c0bf
+NOTE rules written; no independent rebuild has been graded yet.

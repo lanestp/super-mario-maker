@@ -12,6 +12,6 @@ R1 A try at moment t still counts when now - t is less than WINDOW. A try exactl
 R2 A try later than now (a clock that went back) still counts.
 R3 The answer is the tries that still count, in the order they came in times, repeats kept. No try that counts gives an empty list.
 PINNED const WINDOW = 3600000 CITED assumption the server's owner 2026-11-17: one hour, in milliseconds
-ORACLE value -> oracles/tries_still_counted.json CANONICAL-SHA256 66dc82aa7d7fd723a66f63e7913f221f7e77e192cc71b56245f4f0b22f953e4d
-NOTE rules written; no independent rebuild has been graded yet.
 PROVENANCE recorded by rdv from joinpage/tries_still_counted.go
+ORACLE value -> oracles/tries_still_counted.json CANONICAL-SHA256 1adfb69b0a52769232e915b6a389e729782dacafcb87bb1ebf3c47f4148943e7
+NOTE rules written; no independent rebuild has been graded yet.

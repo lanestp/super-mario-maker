@@ -12,6 +12,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 )
@@ -129,13 +130,7 @@ func stopLeftovers(binaries string) {
 	runtimes, _ := filepath.Glob(filepath.Join(os.TempDir(), runtimePrefix+"*"))
 
 	for _, leftover := range runtimes {
-		owner, err := os.ReadFile(filepath.Join(leftover, ownerFile))
-		if err != nil {
-			continue
-		}
-
-		pid, err := strconv.Atoi(string(owner))
-		if err != nil || processIsRunning(pid) {
+		if !isLeftover(leftover) {
 			continue
 		}
 
@@ -146,6 +141,23 @@ func stopLeftovers(binaries string) {
 
 		os.RemoveAll(leftover)
 	}
+}
+
+// * A folder is left behind when the test process it names has gone. One
+// * with no owner, made before owners were written down or by a process
+// * killed between making it and writing the owner, is left behind once
+// * it is older than any test run
+func isLeftover(runtime string) bool {
+	owner, err := os.ReadFile(filepath.Join(runtime, ownerFile))
+	if err != nil {
+		info, err := os.Stat(runtime)
+
+		return err == nil && time.Since(info.ModTime()) > 10*time.Minute
+	}
+
+	pid, err := strconv.Atoi(string(owner))
+
+	return err == nil && !processIsRunning(pid)
 }
 
 func processIsRunning(pid int) bool {

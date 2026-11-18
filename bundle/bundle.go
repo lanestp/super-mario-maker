@@ -24,6 +24,7 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/PretendoNetwork/super-mario-maker/accountapi"
 	"github.com/PretendoNetwork/super-mario-maker/accounts"
 	"github.com/PretendoNetwork/super-mario-maker/mii"
 	"github.com/PretendoNetwork/super-mario-maker/store"
@@ -71,9 +72,9 @@ var clientCertificates = []string{
 	"WIIU_WOOD_1_CERT.der", "WIIU_WOOD_1_RSA_KEY.aes",
 }
 
-// * The services a console reaches besides the account server. None are
-// * served, but Cemu wants an address for each
-var unservedServices = []string{"ecs", "nus", "ias", "ccsu", "ccs", "idbe", "boss", "tagaya", "olv"}
+// * The services a console reaches besides the account server and
+// * Miiverse. None are served, but Cemu wants an address for each
+var unservedServices = []string{"ecs", "nus", "ias", "ccsu", "ccs", "idbe", "boss", "tagaya"}
 
 // Cemu returns the zip a player unpacks into Cemu's folder to play as
 // the account. password is the account's, and accountServer is how Cemu
@@ -184,6 +185,7 @@ func networkServices(accountServer string) string {
 	var urls strings.Builder
 
 	fmt.Fprintf(&urls, "\t\t<act>%s</act>\n", accountServer)
+	fmt.Fprintf(&urls, "\t\t<olv>%s%s/v1/endpoint</olv>\n", accountServer, accountapi.MiiversePath)
 
 	for _, name := range unservedServices {
 		fmt.Fprintf(&urls, "\t\t<%s>%s/unserved/%s</%s>\n", name, accountServer, name, name)

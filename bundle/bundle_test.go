@@ -116,6 +116,10 @@ func TestCemuBundleLogsInAsThePlayer(t *testing.T) {
 		t.Errorf("Cemu is not pointed at the server:\n%s", services)
 	}
 
+	if services := string(files["network_services.xml"]); !strings.Contains(services, "<olv>https://smm.example.com/olv/v1/endpoint</olv>") {
+		t.Errorf("Cemu is not pointed at the server's Miiverse stand-in, so uploads end in error 115-1101:\n%s", services)
+	}
+
 	if len(files["otp.bin"]) != 1024 || len(files["seeprom.bin"]) != 512 || !bytes.Equal(files["otp.bin"], make([]byte, 1024)) {
 		t.Error("otp.bin and seeprom.bin are not blank files of the sizes Cemu wants")
 	}

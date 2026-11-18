@@ -123,7 +123,7 @@ def account_file(username, pid, password):
 def network_services(url):
 	unserved = "\n".join(
 		"\t\t<%s>%s/unserved/%s</%s>" % (name, url, name, name)
-		for name in ("ecs", "nus", "ias", "ccsu", "ccs", "idbe", "boss", "tagaya", "olv")
+		for name in ("ecs", "nus", "ias", "ccsu", "ccs", "idbe", "boss", "tagaya")
 	)
 	return (
 		'<?xml version="1.0" encoding="UTF-8"?>\n<content>\n\t<networkname>SMM</networkname>\n'
@@ -131,7 +131,7 @@ def network_services(url):
 		# certificates, which a player does not have. The connection is
 		# still encrypted
 		"\t<disablesslverification>1</disablesslverification>\n\t<urls>\n"
-		"\t\t<act>%s</act>\n%s\n\t</urls>\n</content>\n" % (url, unserved)
+		"\t\t<act>%s</act>\n\t\t<olv>%s/olv/v1/endpoint</olv>\n%s\n\t</urls>\n</content>\n" % (url, url, unserved)
 	)
 
 

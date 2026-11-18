@@ -105,6 +105,7 @@ func Handler(config Config) (http.Handler, error) {
 	mux.HandleFunc("GET /v1/api/provider/nex_token/@me", a.nexToken)
 	mux.HandleFunc("GET /v1/api/provider/service_token/@me", a.serviceToken)
 	mux.HandleFunc("GET /v1/api/admin/mapped_ids", a.mappedIDs)
+	registerMiiverse(mux)
 
 	return mux, nil
 }

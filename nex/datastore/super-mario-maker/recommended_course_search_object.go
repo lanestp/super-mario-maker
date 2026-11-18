@@ -32,10 +32,14 @@ func RecommendedCourseSearchObject(err error, packet nex.PacketInterface, callID
 	// * 100 Mario (Normal)          ["1", "0",  "74",  "",  "0"]
 
 	// * 100 Mario requests 50 courses and needs at least 32 back,
-	// * Course World on the Wii U requests 100
+	// * Course World on the Wii U requests 100. Asking for 0 asks for as
+	// * many as a search hands out, as it does for the ranked searches
 	length := int(param.ResultRange.Length)
-	if length < 0 || length > store.MaxRandomCourses {
+	if length > store.MaxRandomCourses {
 		globals.Logger.Warningf("Limiting request to %d courses (was %d)", store.MaxRandomCourses, length)
+	}
+
+	if length <= 0 || length > store.MaxRandomCourses {
 		length = store.MaxRandomCourses
 	}
 

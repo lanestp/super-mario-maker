@@ -354,15 +354,17 @@ func TestRecommendedCoursesAreNoMoreThanAskedForWhenManyHaveNotBeenTriedEnough(t
 	}
 }
 
-func TestAskingForNoRecommendedCoursesGivesNone(t *testing.T) {
+// * As in the ranked searches, a length of 0 asks for as many courses
+// * as a search hands out
+func TestAskingForNoRecommendedCoursesGivesAsManyAsThereAre(t *testing.T) {
 	server := setUp(t)
 
 	addCourseFailing(t, server.store, 10)
 	addCourse(t, server.store, 0, 0)
 
 	for _, extraData := range []types.List[types.String]{courseWorldAll, oneHundredMarioEasy} {
-		if got := recommended(t, 0, extraData); len(got) != 0 {
-			t.Errorf("%v gave %d courses, want none", extraData, len(got))
+		if got := recommended(t, 0, extraData); len(got) != 2 {
+			t.Errorf("%v gave %d courses, want both", extraData, len(got))
 		}
 	}
 }

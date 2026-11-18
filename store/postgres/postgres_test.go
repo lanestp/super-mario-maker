@@ -22,6 +22,11 @@ func TestStore(t *testing.T) {
 				t.Fatal(err)
 			}
 		},
+		SetPasswords: func(t *testing.T, dataID uint64, access, update uint64) {
+			if _, err := database.Postgres.Exec(`UPDATE datastore.objects SET access_password=$1, update_password=$2 WHERE data_id=$3`, int64(access), int64(update), int64(dataID)); err != nil {
+				t.Fatal(err)
+			}
+		},
 	})
 }
 

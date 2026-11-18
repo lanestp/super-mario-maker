@@ -170,6 +170,94 @@ func TestImportCourseRefusesBadCoursesWithoutWritingAnything(t *testing.T) {
 	}
 }
 
+func TestImportCourseTakesNumbersAndNamesRightAtTheirLimits(t *testing.T) {
+	for name, change := range map[string]func(*seed.ArchivedCourse){
+		"a name of exactly 32 characters": func(c *seed.ArchivedCourse) { c.Name = "exactly thirty two characters ok" },
+		"nobody cleared it":               func(c *seed.ArchivedCourse) { c.Clears = 0 },
+		"every attempt was a clear":       func(c *seed.ArchivedCourse) { c.Clears = c.Attempts },
+		"no stars":                        func(c *seed.ArchivedCourse) { c.Stars = 0 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := newSetup(t)
+			course := archivedCourse(t)
+			change(&course)
+
+			if err := s.seeder.ImportCourse(course); err != nil {
+				t.Fatalf("got %v, want it imported", err)
+			}
+		})
+	}
+}
+
+func ratingsOf(t *testing.T, s store.Store, dataID types.UInt64) map[int8]datastore_types.DataStoreRatingInfo {
+	t.Helper()
+
+	info, nexError := s.GetObjectInfoByDataID(dataID)
+	if nexError != nil {
+		t.Fatal(nexError)
+	}
+
+	ratings := map[int8]datastore_types.DataStoreRatingInfo{}
+	for _, rating := range info.Ratings {
+		ratings[int8(rating.Slot)] = rating.Rating
+	}
+
+	return ratings
+}
+
+// * A number that is 0 was never rated, and a course nobody cleared has
+// * no record, even when the archive names one
+func TestImportCourseOnlyAddsWhatHappened(t *testing.T) {
+	s := newSetup(t)
+
+	uncleared := archivedCourse(t)
+	uncleared.Clears = 0
+	uncleared.Attempts = 20
+
+	if err := s.seeder.ImportCourse(uncleared); err != nil {
+		t.Fatal(err)
+	}
+
+	ratings := ratingsOf(t, s.store, types.UInt64(uncleared.DataID))
+	for _, slot := range []int8{store.RatingSlotPlays, store.RatingSlotClears} {
+		if ratings[slot].Count != 0 || ratings[slot].TotalValue != 0 {
+			t.Errorf("slot %d of a course nobody cleared was rated %d times to %d, want never", slot, ratings[slot].Count, ratings[slot].TotalValue)
+		}
+	}
+
+	if ratings[store.RatingSlotAttempts].Count != 1 || ratings[store.RatingSlotAttempts].TotalValue != 20 {
+		t.Errorf("the attempts are %+v, want 20 added at once", ratings[store.RatingSlotAttempts])
+	}
+
+	if _, nexError := s.store.GetCourseRecordByDataIDAndSlot(types.UInt64(uncleared.DataID), 0); nexError == nil {
+		t.Error("a course nobody cleared has a record")
+	}
+
+	alwaysCleared := archivedCourse(t)
+	alwaysCleared.DataID++
+	alwaysCleared.Clears = alwaysCleared.Attempts
+
+	if err := s.seeder.ImportCourse(alwaysCleared); err != nil {
+		t.Fatal(err)
+	}
+
+	if fails := ratingsOf(t, s.store, types.UInt64(alwaysCleared.DataID))[store.RatingSlotFails]; fails.Count != 0 {
+		t.Errorf("a course nobody failed has its fails rated %d times", fails.Count)
+	}
+
+	unrecorded := archivedCourse(t)
+	unrecorded.DataID += 2
+	unrecorded.Record = nil
+
+	if err := s.seeder.ImportCourse(unrecorded); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, nexError := s.store.GetCourseRecordByDataIDAndSlot(types.UInt64(unrecorded.DataID), 0); nexError == nil {
+		t.Error("a course archived with no record was given one")
+	}
+}
+
 func TestImportCourseGivesAMakerWithNoUsableMiiAStandIn(t *testing.T) {
 	s := newSetup(t)
 	course := archivedCourse(t)

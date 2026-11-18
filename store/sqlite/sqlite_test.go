@@ -28,6 +28,11 @@ func TestStore(t *testing.T) {
 				t.Fatal(err)
 			}
 		},
+		SetPasswords: func(t *testing.T, dataID uint64, access, update uint64) {
+			if _, err := current.DB().Exec(`UPDATE objects SET access_password=?, update_password=? WHERE data_id=?`, int64(access), int64(update), int64(dataID)); err != nil {
+				t.Fatal(err)
+			}
+		},
 	})
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/rand/v2"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +26,11 @@ func testInputs() map[string][]byte {
 		}
 	}
 
+	twoValues := make([]byte, 20000)
+	for i := range twoValues {
+		twoValues[i] = byte(random.IntN(2))
+	}
+
 	return map[string][]byte{
 		"one byte":     {0x42},
 		"two bytes":    {0x00, 0xFF},
@@ -41,6 +47,9 @@ func testInputs() map[string][]byte {
 		"noise":      noise,
 		"sparse":     sparse,
 		"far repeat": append(append(append([]byte{}, noise[:1500]...), make([]byte, 100)...), noise[:1500]...),
+		// * Few values to write but copies from all over, which makes the
+		// * distance stream longer than the symbol stream
+		"two values": twoValues,
 	}
 }
 
@@ -185,5 +194,114 @@ func TestDecompressRefusesBadData(t *testing.T) {
 		// * Keep the claimed size small so a damaged size can not ask for 16 MB each time
 		damaged[5] = 0
 		_, _ = Decompress(damaged)
+	}
+}
+
+// * Packs a stream written by hand as text: ones and zeros, with spaces
+// * between fields to read it more easily. Each stream ends on a whole word
+func handWritten(size int, symbolStream, distanceStream string) []byte {
+	pack := func(text string) []byte {
+		var packed []byte
+		var word uint32
+		used := 0
+
+		for _, bit := range text {
+			if bit == ' ' {
+				continue
+			}
+
+			word = word<<1 | uint32(bit-'0')
+			used++
+
+			if used == 32 {
+				packed = binary.BigEndian.AppendUint32(packed, word)
+				word, used = 0, 0
+			}
+		}
+
+		if used > 0 {
+			packed = binary.BigEndian.AppendUint32(packed, word<<(32-used))
+		}
+
+		return packed
+	}
+
+	symbols := pack(symbolStream)
+
+	stream := []byte("ASH0")
+	stream = binary.BigEndian.AppendUint32(stream, uint32(size))
+	stream = binary.BigEndian.AppendUint32(stream, uint32(headerSize+len(symbols)))
+	stream = append(stream, symbols...)
+
+	return append(stream, pack(distanceStream)...)
+}
+
+func TestAHeaderWithNothingAfterItIsNotCompressedData(t *testing.T) {
+	header := handWritten(4, "", "")
+	if len(header) != headerSize {
+		t.Fatalf("the header is %d bytes, want %d", len(header), headerSize)
+	}
+
+	if IsCompressed(header) {
+		t.Error("a header alone was taken for compressed data")
+	}
+
+	if _, err := Decompress(header); !errors.Is(err, ErrNotASH0) {
+		t.Errorf("got %v, want ErrNotASH0", err)
+	}
+}
+
+// * Nothing in the format keeps the two streams apart. A stream with no
+// * copies never reads a distance, so its distance stream may start right
+// * after the header, sharing the words of the symbol stream
+func TestDecompressReadsADistanceStreamThatStartsRightAfterTheHeader(t *testing.T) {
+	// * Symbol tree (node, leaf 'A', leaf 'B'), then the codes for A and B.
+	// * Read as a distance tree, the same bits are a node and two leaves
+	stream := handWritten(2, "1 0 001000001 0 001000010 0 1", "")
+	binary.BigEndian.PutUint32(stream[8:12], headerSize)
+
+	output, err := Decompress(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(output) != "AB" {
+		t.Errorf("got %q, want AB", output)
+	}
+}
+
+func TestDecompressRefusesACopyThatGoesPastTheSizeInTheHeader(t *testing.T) {
+	// * Symbol tree (node, leaf 'A', leaf 0x101: a copy of 4), then A and
+	// * the copy, which would make 5 bytes of the 3 the header promises.
+	// * Distance tree (node, leaf 0, leaf 1), then 0: one back
+	stream := handWritten(3, "1 0 001000001 0 100000001 0 1", "1 0 00000000000 0 00000000001 0")
+
+	if output, err := Decompress(stream); !errors.Is(err, ErrCorrupt) {
+		t.Errorf("got %q (%v), want ErrCorrupt", output, err)
+	}
+}
+
+// * A tree with more nodes than one leaf for each value can have is
+// * corrupt, whatever data follows it
+func TestDecompressRefusesATreeWithMoreLeavesThanThereAreValues(t *testing.T) {
+	// * 601 leaves, one more node each time down the right side
+	tree := strings.Repeat("1 0 001000001 ", 600) + "0 001000001"
+
+	stream := handWritten(1, tree+" 0", "1 0 00000000000 0 00000000001")
+
+	if output, err := Decompress(stream); !errors.Is(err, ErrCorrupt) {
+		t.Errorf("got %q (%v), want ErrCorrupt", output, err)
+	}
+}
+
+// * The size field holds 3 bytes, so the largest size it holds must work
+func TestCompressTakesTheLargestSizeTheFormatHolds(t *testing.T) {
+	compressed, err := Compress(make([]byte, MaxSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if size, err := DecompressedSize(compressed); err != nil || size != MaxSize {
+		t.Errorf("the header says %d bytes (%v), want %d", size, err, MaxSize)
 	}
 }

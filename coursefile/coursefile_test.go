@@ -112,13 +112,15 @@ func TestUnpackRefusesWhatIsNotACourseFile(t *testing.T) {
 	}
 
 	for name, bad := range map[string][]byte{
-		"nothing":            nil,
-		"not compressed":     bytes.Repeat([]byte("course"), 1000),
-		"one part":           onePart,
-		"five parts":         append(bytes.Clone(file), onePart...),
-		"header before":      append([]byte{0, 0, 0, 0}, file...),
-		"cut short":          file[:len(file)-2000],
-		"parts out of order": wrongOrder,
+		"nothing":        nil,
+		"not compressed": bytes.Repeat([]byte("course"), 1000),
+		"one part":       onePart,
+		"five parts":     append(bytes.Clone(file), onePart...),
+		// * The last word a part header can start at, with only its first two words there
+		"a fifth header at the very end": append(bytes.Clone(file), "ASH0\x00\x00\x00\x00"...),
+		"header before":                  append([]byte{0, 0, 0, 0}, file...),
+		"cut short":                      file[:len(file)-2000],
+		"parts out of order":             wrongOrder,
 	} {
 		if _, err := Unpack(bad); !errors.Is(err, ErrNotACourseFile) {
 			t.Errorf("%s: got %v, want ErrNotACourseFile", name, err)

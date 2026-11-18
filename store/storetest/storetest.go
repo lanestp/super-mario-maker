@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,11 @@ type Backend struct {
 	// SetUnderReview marks an object as under review, which
 	// no method of store.Store does. It may use the last opened store
 	SetUnderReview func(t *testing.T, dataID uint64)
+
+	// SetPasswords gives an object an access password and an update
+	// password, which no method of store.Store does. It may use the last
+	// opened store
+	SetPasswords func(t *testing.T, dataID uint64, access, update uint64)
 }
 
 // Run runs every storage test against the backend
@@ -42,6 +48,7 @@ func Run(t *testing.T, backend Backend) {
 		{"AttachFile", testAttachFile},
 		{"ObjectUpdates", testObjectUpdates},
 		{"PersistenceTarget", testPersistenceTarget},
+		{"Passwords", testPasswords},
 		{"Ratings", testRatings},
 		{"CustomRankings", testCustomRankings},
 		{"RankedAndLatestObjects", testRankedAndLatestObjects},
@@ -338,6 +345,54 @@ func testPersistenceTarget(t *testing.T, s store.Store, _ Backend) {
 
 	_, nexError = s.GetObjectInfoByPersistenceTargetWithPassword(target, 0)
 	mustFail(t, nexError, nex.ResultCodes.DataStore.NotFound, "persistence target of a deleted object")
+}
+
+// * An object with no password takes any password. One with a password
+// * takes only that one: the access password to read it, and the update
+// * password to change it
+func testPasswords(t *testing.T, s store.Store, backend Backend) {
+	open := createObject(t, s, objectOptions{owner: 1000, name: "open", dataType: 1, persistenceSlotID: 3})
+	locked := createObject(t, s, objectOptions{owner: 2000, name: "locked", dataType: 1, persistenceSlotID: 3})
+
+	backend.SetPasswords(t, uint64(locked), 111, 222)
+
+	target := func(owner types.PID) datastore_types.DataStorePersistenceTarget {
+		target := datastore_types.NewDataStorePersistenceTarget()
+		target.OwnerID = owner
+		target.PersistenceSlotID = 3
+
+		return target
+	}
+
+	read := func(dataID types.UInt64, owner types.PID, password types.UInt64) []*nex.Error {
+		_, byTarget := s.GetObjectInfoByPersistenceTargetWithPassword(target(owner), password)
+
+		return []*nex.Error{s.IsObjectAvailableWithPassword(dataID, password), byTarget}
+	}
+
+	for _, password := range []types.UInt64{0, 4321} {
+		for _, nexError := range read(open, 1000, password) {
+			mustSucceed(t, nexError)
+		}
+
+		mustSucceed(t, s.UpdateObjectPeriodByDataIDWithPassword(open, 30, password))
+	}
+
+	for _, nexError := range read(locked, 2000, 111) {
+		mustSucceed(t, nexError)
+	}
+
+	for _, wrong := range []types.UInt64{0, 222, 4321} {
+		for _, nexError := range read(locked, 2000, wrong) {
+			mustFail(t, nexError, nex.ResultCodes.DataStore.InvalidPassword, fmt.Sprintf("reading a locked object with password %d", wrong))
+		}
+	}
+
+	mustSucceed(t, s.UpdateObjectPeriodByDataIDWithPassword(locked, 30, 222))
+
+	for _, wrong := range []types.UInt64{0, 111, 4321} {
+		mustFail(t, s.UpdateObjectPeriodByDataIDWithPassword(locked, 60, wrong), nex.ResultCodes.DataStore.InvalidPassword, fmt.Sprintf("changing a locked object with password %d", wrong))
+	}
 }
 
 func ratingsBySlot(ratings []datastore_types.DataStoreRatingInfoWithSlot) map[int]datastore_types.DataStoreRatingInfo {
@@ -1097,8 +1152,8 @@ func testImportObject(t *testing.T, s store.Store, _ Backend) {
 	// * New objects are made above every DataID that can be imported, so
 	// * that a course imported later never finds its DataID taken
 	next := createObject(t, s, objectOptions{owner: 1000, name: "made after", dataType: courseDataType})
-	if next < store.ImportedDataIDLimit {
-		t.Errorf("an object made after the import got DataID %d, want one from %d", next, store.ImportedDataIDLimit)
+	if next != store.ImportedDataIDLimit {
+		t.Errorf("the first object made after the import got DataID %d, want %d, the first not kept for imports", next, store.ImportedDataIDLimit)
 	}
 
 	if err := s.ImportObject(imported+1, 1755555555, param, created); err != nil {
@@ -1107,6 +1162,11 @@ func testImportObject(t *testing.T, s store.Store, _ Backend) {
 
 	if err := s.ImportObject(store.ImportedDataIDLimit, 1, param, created); err == nil || errors.Is(err, store.ErrObjectExists) {
 		t.Errorf("a DataID in the server's own range gave %v, want it refused", err)
+	}
+
+	// * Whoever runs an import is told which DataIDs can be imported
+	if err := s.ImportObject(0, 1, param, created); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("from 1 to %d", store.ImportedDataIDLimit-1)) {
+		t.Errorf("DataID 0 gave %v, want it refused with the DataIDs that can be imported", err)
 	}
 }
 
@@ -1157,6 +1217,11 @@ func testImportAttempts(t *testing.T, s store.Store, _ Backend) {
 
 	if attempts, _ := s.ImportAttemptsToRetry([]string{store.ImportFailed, store.ImportNotArchived, store.ImportRefused}, 5, 10); len(attempts) != 2 {
 		t.Errorf("after forgetting one, %d attempts are left, want 2", len(attempts))
+	}
+
+	// * Asking for no outcomes is asking for nothing
+	if attempts, err := s.ImportAttemptsToRetry(nil, 5, 10); err != nil || len(attempts) != 0 {
+		t.Errorf("asking for no outcomes gave %+v (%v), want nothing", attempts, err)
 	}
 }
 

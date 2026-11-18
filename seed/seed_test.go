@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	miidata "github.com/PretendoNetwork/super-mario-maker/mii"
+	"math"
 	"math/rand/v2"
 	"path/filepath"
 	"testing"
@@ -107,6 +108,24 @@ func TestCourseNameIsReadFromTheCourse(t *testing.T) {
 
 		if got := seed.CourseName(course); got != name {
 			t.Errorf("got %q, want %q", got, name)
+		}
+	}
+}
+
+// * The name field holds 33 characters. A name ends at the first zero, or
+// * at the end of the field when it fills all of it
+func TestCourseNameEndsAtTheFirstZeroOrTheEndOfTheField(t *testing.T) {
+	for written, want := range map[string]string{
+		"a name that fills all 33 places!!": "a name that fills all 33 places!!",
+		"Short\x00left over from before":    "Short",
+	} {
+		course, err := coursefile.Unpack(courseFile(t, written))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := seed.CourseName(course); got != want {
+			t.Errorf("got %q, want %q", got, want)
 		}
 	}
 }
@@ -395,6 +414,12 @@ func TestMakerMetaBinaryRenamesTheMiiAndKeepsItValid(t *testing.T) {
 	if string(short) != "too short" {
 		t.Errorf("a meta binary with no room for a Mii became %q", short)
 	}
+
+	// * Ending right after the Mii still leaves room for it
+	justRoom := template[:0x18+96]
+	if renamed := seed.MakerMetaBinary(justRoom, "SeedMaker01", 1800000002); string(renamed) != string(seed.MakerMetaBinary(template, "SeedMaker01", 1800000002)[:0x18+96]) {
+		t.Error("a meta binary that ends right after its Mii was not renamed")
+	}
 }
 
 func TestStarFillsAMakersStarredListWithOtherMakersCourses(t *testing.T) {
@@ -576,5 +601,55 @@ func TestClearRecordSaysWhoClearedFirstAndWhoWasFastest(t *testing.T) {
 
 	if record.BestScore < 20_000 || record.BestScore >= 300_000 {
 		t.Errorf("the record time is %d thousandths of a second, want between 20 and 300 seconds", record.BestScore)
+	}
+}
+
+// * Gives the same number every time, so that a test can pick what a
+// * random choice comes out as
+type sameNumber uint64
+
+func (n sameNumber) Uint64() uint64 { return uint64(n) }
+
+// * With every random choice at its smallest, and then at its largest,
+// * the record must still be faster than the first clear and in range
+func TestClearRecordIsFasterThanTheFirstClearWhateverTheDiceSay(t *testing.T) {
+	for name, source := range map[string]sameNumber{
+		// * Gives 0 for any range
+		"smallest": 1 << 32,
+		// * Gives the top of any range
+		"largest": math.MaxUint64,
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := newSetup(t)
+
+			pids, err := s.seeder.Makers("SeedMaker", 3, s.player)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			course, err := s.seeder.Course(courseFile(t, "Course"), pids[0], seed.Stats{Clears: 2, Attempts: 5, Fails: 3, Plays: 2})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			s.seeder.Random = rand.New(source)
+
+			if err := s.seeder.ClearRecord(course, pids[1], pids[2]); err != nil {
+				t.Fatal(err)
+			}
+
+			record, nexError := s.store.GetCourseRecordByDataIDAndSlot(types.UInt64(course), 0)
+			if nexError != nil {
+				t.Fatal(nexError)
+			}
+
+			if record.BestPID != pids[2] {
+				t.Errorf("the record is held by %d, want %d, who was faster than the first clear", record.BestPID, pids[2])
+			}
+
+			if record.BestScore < 20_000 || record.BestScore >= 300_000 {
+				t.Errorf("the record time is %d thousandths of a second, want between 20 and 300 seconds", record.BestScore)
+			}
+		})
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
@@ -70,30 +71,60 @@ func serverBinary(t *testing.T) string {
 	return binaryPath
 }
 
+// * Ports for the server are picked at random from below the range the
+// * system hands out by itself (from 32768 on Linux, 49152 on macOS), so
+// * a port picked here can not be given to another test's listener or
+// * connection before the server takes it. Each port given out is
+// * remembered, so one test run never hands out the same one twice
+const (
+	lowestTestPort  = 20000
+	highestTestPort = 29999
+)
+
+var (
+	portsMutex sync.Mutex
+	portsGiven = map[int]bool{}
+)
+
 func freeUDPPort(t *testing.T) int {
 	t.Helper()
 
-	connection, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer connection.Close()
-
-	return connection.LocalAddr().(*net.UDPAddr).Port
+	return freePort(t, func(port int) bool { return !udpPortInUse(port) })
 }
 
 func freeTCPPort(t *testing.T) int {
 	t.Helper()
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	return freePort(t, func(port int) bool {
+		listener, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+		if err != nil {
+			return false
+		}
+
+		listener.Close()
+
+		return true
+	})
+}
+
+func freePort(t *testing.T, free func(port int) bool) int {
+	t.Helper()
+
+	portsMutex.Lock()
+	defer portsMutex.Unlock()
+
+	for range 1000 {
+		port := lowestTestPort + rand.IntN(highestTestPort-lowestTestPort+1)
+
+		if !portsGiven[port] && free(port) {
+			portsGiven[port] = true
+			return port
+		}
 	}
 
-	defer listener.Close()
+	t.Fatal("no free port found for the server")
 
-	return listener.Addr().(*net.TCPAddr).Port
+	return 0
 }
 
 func udpPortInUse(port int) bool {

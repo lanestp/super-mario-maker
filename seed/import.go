@@ -54,7 +54,11 @@ type ArchivedCourse struct {
 	Stars    int
 	Clears   int
 	Attempts int
-	Record   *ArchivedRecord
+	// Plays is how many players played it. 0 when not known, and the
+	// players who cleared it stand in, which is the fewest there can
+	// have been
+	Plays  int
+	Record *ArchivedRecord
 }
 
 // * The meta binary of the maker object a real game made, holding the Mii
@@ -187,11 +191,14 @@ func (s *Seeder) ImportCourse(course ArchivedCourse) error {
 
 	dataID := types.UInt64(course.DataID)
 
-	// * Each total is added at once. How many players there were is not
-	// * archived, so the players who cleared it stand in, which is the
-	// * fewest there can have been
+	plays := course.Plays
+	if plays <= 0 {
+		plays = course.Clears
+	}
+
+	// * Each total is added at once
 	for slot, total := range map[int]int{
-		store.RatingSlotPlays:    course.Clears,
+		store.RatingSlotPlays:    plays,
 		store.RatingSlotClears:   course.Clears,
 		store.RatingSlotAttempts: course.Attempts,
 		store.RatingSlotFails:    course.Attempts - course.Clears,

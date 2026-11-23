@@ -74,6 +74,7 @@ type Course struct {
 	Stars    int       `json:"stars"`
 	Clears   int       `json:"clears"`
 	Attempts int       `json:"attempts"`
+	Plays    int       `json:"plays,omitempty"`
 	Record   *Record   `json:"record,omitempty"`
 }
 
@@ -185,6 +186,7 @@ func (s *service) importCourse(w http.ResponseWriter, r *http.Request) {
 		Stars:    course.Stars,
 		Clears:   course.Clears,
 		Attempts: course.Attempts,
+		Plays:    course.Plays,
 	}
 
 	if course.Record != nil {

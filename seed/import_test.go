@@ -274,3 +274,33 @@ func TestImportCourseGivesAMakerWithNoUsableMiiAStandIn(t *testing.T) {
 		t.Error("the stand-in Mii has a wrong checksum, so a game would refuse it")
 	}
 }
+
+// * How many players played a course is kept when the archive knows it,
+// * and the players who cleared it stand in when it does not
+func TestImportCourseKeepsHowManyPlayed(t *testing.T) {
+	s := newSetup(t)
+
+	known := archivedCourse(t)
+	known.Clears = 16
+	known.Attempts = 729
+	known.Plays = 173
+
+	unknown := archivedCourse(t)
+	unknown.DataID++
+	unknown.Clears = 16
+	unknown.Attempts = 729
+
+	for _, course := range []seed.ArchivedCourse{known, unknown} {
+		if err := s.seeder.ImportCourse(course); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if plays := ratingsOf(t, s.store, types.UInt64(known.DataID))[store.RatingSlotPlays]; plays.TotalValue != 173 || plays.Count != 1 {
+		t.Errorf("a course 173 played has plays %+v, want 173 added at once", plays)
+	}
+
+	if plays := ratingsOf(t, s.store, types.UInt64(unknown.DataID))[store.RatingSlotPlays]; plays.TotalValue != 16 {
+		t.Errorf("a course with no play count has plays %+v, want its 16 clears", plays)
+	}
+}

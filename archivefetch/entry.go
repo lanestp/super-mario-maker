@@ -19,6 +19,7 @@ type Entry struct {
 	CreatorID       uint32 `json:"creatorid"`
 	Clears          int    `json:"clears"`
 	TotalAttempts   int    `json:"total_attempts"`
+	UserPlays       int    `json:"user_plays"`
 	UploadTime      string `json:"uploadTime"`
 	RecordMS        int    `json:"world_record_ms"`
 	RecordHolder    string `json:"world_record_holder_nnid"`
@@ -43,6 +44,7 @@ func (e Entry) Archived(file []byte) (seed.ArchivedCourse, error) {
 		Stars:    e.Stars,
 		Clears:   e.Clears,
 		Attempts: e.TotalAttempts,
+		Plays:    e.UserPlays,
 	}
 
 	if e.RecordMS > 0 && e.RecordHolder != "" {

@@ -68,6 +68,7 @@ type indexEntry struct {
 	Clears          int    `json:"clears"`
 	Failures        int    `json:"failures"`
 	TotalAttempts   int    `json:"total_attempts"`
+	UserPlays       int    `json:"user_plays"`
 	UploadTime      string `json:"uploadTime"`
 	RecordMS        int    `json:"world_record_ms"`
 	RecordHolder    string `json:"world_record_holder_nnid"`
@@ -350,6 +351,7 @@ func (e indexEntry) course() (importsvc.Course, error) {
 		Stars:    e.Stars,
 		Clears:   e.Clears,
 		Attempts: e.TotalAttempts,
+		Plays:    e.UserPlays,
 	}
 
 	if e.RecordMS > 0 && e.RecordHolder != "" {

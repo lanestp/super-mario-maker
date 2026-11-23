@@ -32,7 +32,7 @@ func GetMetasWithCourseRecord(err error, packet nex.PacketInterface, callID uint
 		// * to be used for all objects being requested here. So
 		// * just assume metaParam is ONLY used for the resultOption
 		// * field?
-		objectInfo, nexError := globals.Store.GetObjectInfoByDataID(params[i].DataID)
+		objectInfo, nexError := globals.ObjectInfoOrFromArchive(params[i].DataID, globals.Store.GetObjectInfoByDataID)
 		if nexError != nil {
 			objectInfo = datastore_types.NewDataStoreMetaInfo()
 		} else {

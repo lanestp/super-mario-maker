@@ -16,6 +16,7 @@ import (
 	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/super-mario-maker/accountapi"
+	"github.com/PretendoNetwork/super-mario-maker/archivefetch"
 	"github.com/PretendoNetwork/super-mario-maker/fileproxy"
 	"github.com/PretendoNetwork/super-mario-maker/globals"
 	"github.com/PretendoNetwork/super-mario-maker/importsvc"
@@ -127,6 +128,7 @@ func configure() {
 		configureFileProxy,
 		configureJoinPage,
 		configureImportService,
+		configureArchiveFetch,
 	}
 
 	for _, step := range steps {
@@ -440,17 +442,9 @@ func configureImportService() error {
 		return fmt.Errorf("PN_SMM_IMPORT_ADDRESS must be a loopback address, such as 127.0.0.1:8384, as the import service is only for this machine. Got %s", address)
 	}
 
-	storage := fileproxy.S3{Client: globals.MinIOClient, Bucket: os.Getenv("PN_SMM_CONFIG_S3_BUCKET")}
-
 	handler, err := importsvc.Handler(importsvc.Config{
-		Token: token,
-		Seeder: &seed.Seeder{
-			Store:   globals.Store,
-			KeyBase: os.Getenv("PN_SMM_CONFIG_S3_KEY_BASE"),
-			PutFile: func(key string, data []byte) error {
-				return storage.Put(context.Background(), key, data)
-			},
-		},
+		Token:    token,
+		Seeder:   newSeeder(),
 		LogError: func(err error) { globals.Logger.Error(err.Error()) },
 	})
 	if err != nil {
@@ -464,6 +458,74 @@ func configureImportService() error {
 		ReadTimeout:       time.Minute,
 		WriteTimeout:      time.Minute,
 	}
+
+	return nil
+}
+
+// * A seeder that writes course files where the server hands them out from
+func newSeeder() *seed.Seeder {
+	storage := fileproxy.S3{Client: globals.MinIOClient, Bucket: os.Getenv("PN_SMM_CONFIG_S3_BUCKET")}
+
+	return &seed.Seeder{
+		Store:   globals.Store,
+		KeyBase: os.Getenv("PN_SMM_CONFIG_S3_KEY_BASE"),
+		PutFile: func(key string, data []byte) error {
+			return storage.Put(context.Background(), key, data)
+		},
+	}
+}
+
+// * Turns on fetching courses from the archive while the server runs,
+// * when PN_SMM_ARCHIVE_FETCH is 1: a course a player asks for by its ID
+// * that is not here is fetched then, and PN_SMM_ARCHIVE_FILL_LIMIT (0,
+// * the default, for none) is how many random courses from the whole
+// * archive are brought in in the background. PN_SMM_ARCHIVE_WAIT is the
+// * least time between the background's requests to the archive
+func configureArchiveFetch() error {
+	if strings.TrimSpace(os.Getenv("PN_SMM_ARCHIVE_FETCH")) != "1" {
+		return nil
+	}
+
+	fillLimit := int64(0)
+
+	if value := strings.TrimSpace(os.Getenv("PN_SMM_ARCHIVE_FILL_LIMIT")); value != "" {
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || parsed < 0 {
+			return fmt.Errorf("PN_SMM_ARCHIVE_FILL_LIMIT must be a number of courses, 0 or more. Got %q", value)
+		}
+
+		fillLimit = parsed
+	}
+
+	fillGap := 3 * time.Second
+
+	if value := strings.TrimSpace(os.Getenv("PN_SMM_ARCHIVE_WAIT")); value != "" {
+		parsed, err := time.ParseDuration(value)
+		if err != nil || parsed < time.Second {
+			return fmt.Errorf("PN_SMM_ARCHIVE_WAIT must be a duration of at least 1s, such as 3s. Got %q", value)
+		}
+
+		fillGap = parsed
+	}
+
+	fetcher, err := archivefetch.New(archivefetch.Config{
+		Seeder:    newSeeder(),
+		FillLimit: fillLimit,
+		FillGap:   fillGap,
+		UrgentGap: time.Second,
+		Log:       func(line string) { globals.Logger.Info(line) },
+	})
+	if err != nil {
+		return err
+	}
+
+	globals.FetchFromArchive = fetcher.Fetch
+
+	if fillLimit > 0 {
+		globals.ArchiveFill = fetcher.Fill
+	}
+
+	globals.Logger.Infof("Courses players ask for that are not here are fetched from the archive. The background fill brings in up to %d more", fillLimit)
 
 	return nil
 }

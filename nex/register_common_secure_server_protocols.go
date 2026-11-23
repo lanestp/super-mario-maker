@@ -60,9 +60,17 @@ func registerCommonSecureProtocols() {
 	commonDataStoreProtocol.RootCACert = globals.FileRootCA
 	commonDataStoreProtocol.SetDataKeyBase(os.Getenv("PN_SMM_CONFIG_S3_KEY_BASE"))
 
-	commonDataStoreProtocol.GetObjectInfoByDataID = globals.Store.GetObjectInfoByDataID
+	// * A course asked for by its ID that is not here is fetched from the
+	// * archive, when that is turned on
+	commonDataStoreProtocol.GetObjectInfoByDataID = func(dataID types.UInt64) (datastore_types.DataStoreMetaInfo, *nex.Error) {
+		return globals.ObjectInfoOrFromArchive(dataID, globals.Store.GetObjectInfoByDataID)
+	}
 	commonDataStoreProtocol.GetObjectInfoByPersistenceTargetWithPassword = globals.Store.GetObjectInfoByPersistenceTargetWithPassword
-	commonDataStoreProtocol.GetObjectInfoByDataIDWithPassword = globals.Store.GetObjectInfoByDataIDWithPassword
+	commonDataStoreProtocol.GetObjectInfoByDataIDWithPassword = func(dataID types.UInt64, password types.UInt64) (datastore_types.DataStoreMetaInfo, *nex.Error) {
+		return globals.ObjectInfoOrFromArchive(dataID, func(dataID types.UInt64) (datastore_types.DataStoreMetaInfo, *nex.Error) {
+			return globals.Store.GetObjectInfoByDataIDWithPassword(dataID, password)
+		})
+	}
 	commonDataStoreProtocol.GetObjectOwnerByDataID = globals.Store.GetObjectOwnerByDataID
 	commonDataStoreProtocol.GetObjectSizeByDataID = globals.Store.GetObjectSizeByDataID
 

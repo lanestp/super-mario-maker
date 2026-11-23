@@ -136,3 +136,15 @@ variable "s3_key_base" {
   type        = string
   default     = "courses"
 }
+
+variable "archive_fetch" {
+  description = "Fetch courses from the archive of Nintendo's servers while the server runs: a course a player asks for that is not here, and random ones in the background"
+  type        = bool
+  default     = true
+}
+
+variable "archive_fill_limit" {
+  description = "How many random courses from the whole archive the server brings in in the background. Each takes about 1.5 KB of the data volume and 40 KB of the bucket, and the fill brings in about 600 an hour. 0 turns it off"
+  type        = number
+  default     = 1000000
+}

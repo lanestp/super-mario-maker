@@ -21,7 +21,7 @@ func GetObjectInfos(err error, packet nex.PacketInterface, callID uint32, dataID
 	pInfos := types.NewList[datastore_super_mario_maker_types.DataStoreFileServerObjectInfo]()
 
 	for i := range dataIDs {
-		objectInfo, nexError := globals.Store.GetObjectInfoByDataID(dataIDs[i])
+		objectInfo, nexError := globals.ObjectInfoOrFromArchive(dataIDs[i], globals.Store.GetObjectInfoByDataID)
 		if nexError != nil {
 			return nil, nexError
 		}

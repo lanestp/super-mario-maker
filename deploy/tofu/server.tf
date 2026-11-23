@@ -95,6 +95,11 @@ locals {
     PN_SMM_CONFIG_S3_KEY_BASE         = var.s3_key_base
     PN_SMM_IMPORT_TOKEN               = random_password.import_token.result
     PN_SMM_IMPORT_ADDRESS             = "127.0.0.1:8384"
+    # A course a player asks for that is not here is fetched from the
+    # archive, and random courses from the whole archive are brought in
+    # in the background, up to the limit
+    PN_SMM_ARCHIVE_FETCH      = var.archive_fetch ? "1" : "0"
+    PN_SMM_ARCHIVE_FILL_LIMIT = var.archive_fill_limit
     # Games upload and download course files through the server. Nothing
     # outside the instance is ever given a link to the bucket
     PN_SMM_FILE_BASE_URL = local.files_url

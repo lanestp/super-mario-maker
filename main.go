@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"sync"
 
@@ -29,6 +30,10 @@ func main() {
 				os.Exit(1)
 			}
 		}()
+	}
+
+	if globals.ArchiveFill != nil {
+		go globals.ArchiveFill(context.Background())
 	}
 
 	if globals.AccountAPI != nil {

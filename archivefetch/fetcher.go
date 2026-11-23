@@ -69,6 +69,11 @@ type Config struct {
 	// from, and the fill goes through its courses most played first. The
 	// archive's index is then only asked where a course's file is
 	Catalog *Catalog
+	// FillMostPlayed, with a catalog, has the fill go through the catalog's
+	// courses most played first. Otherwise it picks them uniformly at
+	// random, so that what is here is like the archive as a whole, as
+	// Course World and 100 Mario were
+	FillMostPlayed bool
 	// FillLimit is how many courses the background fill brings in before
 	// it stops. 0 turns it off
 	FillLimit int64
@@ -371,8 +376,13 @@ func (f *Fetcher) Fill(ctx context.Context) {
 		return
 	}
 
-	if f.config.Catalog != nil {
+	if f.config.Catalog != nil && f.config.FillMostPlayed {
 		f.fillFromCatalog(ctx)
+		return
+	}
+
+	if f.config.Catalog != nil {
+		f.fillAtRandom(ctx)
 		return
 	}
 
@@ -467,17 +477,7 @@ func (f *Fetcher) fillFromCatalog(ctx context.Context) {
 				return
 			}
 
-			brought := false
-
-			// * A failure that may go right another time, such as the
-			// * archive being down, is tried again before moving on. The
-			// * gate spaces the tries out further each time
-			for try := 0; try < maxFillTries && ctx.Err() == nil && !f.here(id); try++ {
-				var again bool
-				if brought, again = f.fillOne(ctx, id); !again {
-					break
-				}
-			}
+			brought := f.fillID(ctx, id)
 
 			if ctx.Err() != nil {
 				return
@@ -511,6 +511,64 @@ func (f *Fetcher) fillFromCatalog(ctx context.Context) {
 // * How many times the fill tries a course that failed in a way that may
 // * go right another time
 const maxFillTries = 5
+
+// * Brings in one course for the fill, trying again a failure that may go
+// * right another time, such as the archive being down. The gate spaces
+// * the tries out further each time. Says whether it was brought in
+func (f *Fetcher) fillID(ctx context.Context, dataID uint64) bool {
+	brought := false
+
+	for try := 0; try < maxFillTries && ctx.Err() == nil && !f.here(dataID); try++ {
+		var again bool
+		if brought, again = f.fillOne(ctx, dataID); !again {
+			break
+		}
+	}
+
+	return brought
+}
+
+// * Brings in courses picked uniformly at random from the whole catalog,
+// * until FillLimit of them are here or ctx ends
+func (f *Fetcher) fillAtRandom(ctx context.Context) {
+	kept := f.config.Seeder.Store
+
+	for ctx.Err() == nil {
+		count, err := kept.ImportCursor(fillCounter)
+		if err != nil {
+			f.config.Log(fmt.Sprintf("The archive fill's count could not be read: %v", err))
+			f.pause(ctx)
+
+			continue
+		}
+
+		if count >= f.config.FillLimit {
+			f.config.Log(fmt.Sprintf("The archive fill has brought in %d courses, its limit. It stops here", count))
+			return
+		}
+
+		picked := f.randomMissing(1)
+		if len(picked) == 0 {
+			// * Nothing left to pick, or the catalog could not be read
+			f.pause(ctx)
+			continue
+		}
+
+		if !f.fillID(ctx, picked[0]) {
+			continue
+		}
+
+		count++
+
+		if err := kept.SetImportCursor(fillCounter, count); err != nil {
+			f.config.Log(fmt.Sprintf("The archive fill's count could not be kept: %v", err))
+		}
+
+		if count%100 == 0 {
+			f.config.Log(fmt.Sprintf("The archive fill has brought in %d courses", count))
+		}
+	}
+}
 
 // * Brings in one course for the fill. Says whether it is here now, and
 // * whether it is worth trying again

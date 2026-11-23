@@ -159,10 +159,11 @@ func TestWithACatalogAnIDItDoesNotHaveIsNotLookedUp(t *testing.T) {
 	}
 }
 
-func TestWithACatalogTheFillBringsInTheMostPlayedFirst(t *testing.T) {
+func TestWithACatalogTheFillCanBringInTheMostPlayedFirst(t *testing.T) {
 	catalog := newCatalog(t)
 	s := newSetup(t, func(config *Config) {
 		config.Catalog = catalog
+		config.FillMostPlayed = true
 		config.FillLimit = 4
 	})
 
@@ -196,6 +197,7 @@ func TestTheFillTriesACourseAgainWhenTheArchiveIsDown(t *testing.T) {
 	catalog := newCatalog(t)
 	s := newSetup(t, func(config *Config) {
 		config.Catalog = catalog
+		config.FillMostPlayed = true
 		config.FillLimit = 1
 	})
 
@@ -416,5 +418,47 @@ func TestNewArrivalsDoesNothingWithoutACatalog(t *testing.T) {
 
 	if byID, byPos, files := s.asked(); len(byID)+len(byPos)+len(files) != 0 {
 		t.Error("New Arrivals asked the archive for something with no catalog")
+	}
+}
+
+func TestWithACatalogTheFillPicksCoursesAtRandomByDefault(t *testing.T) {
+	catalog := newCatalog(t)
+	picks := 0
+	s := newSetup(t, func(config *Config) {
+		config.Catalog = catalog
+		config.FillLimit = 3
+		// * Lands on 2000006, then 2000002, then 2000007 (no file), then 2000004
+		config.RandomInt = func(n int64) int64 {
+			defer func() { picks++ }()
+			return []int64{6, 2, 7, 4}[picks%4]
+		}
+	})
+
+	done := make(chan struct{})
+	go func() {
+		s.fetcher.Fill(context.Background())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the fill did not stop at its limit")
+	}
+
+	for id := uint64(firstCourse); id <= firstCourse+9; id++ {
+		want := id == firstCourse+6 || id == firstCourse+2 || id == firstCourse+4
+		if s.here(id) != want {
+			t.Errorf("course %d here: %v, want %v", id, s.here(id), want)
+		}
+	}
+
+	// * Not the most played: the most played course was never asked for
+	if s.here(firstCourse + 9) {
+		t.Error("the random fill brought in the most played course")
+	}
+
+	if count, _ := s.store.ImportCursor(fillCounter); count != 3 {
+		t.Errorf("the fill's count is %d, want 3", count)
 	}
 }

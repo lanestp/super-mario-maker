@@ -515,13 +515,19 @@ func configureArchiveFetch() error {
 		return err
 	}
 
+	fillOrder := strings.TrimSpace(os.Getenv("PN_SMM_ARCHIVE_FILL_ORDER"))
+	if fillOrder != "" && fillOrder != "random" && fillOrder != "most-played" {
+		return fmt.Errorf("PN_SMM_ARCHIVE_FILL_ORDER must be random or most-played. Got %q", fillOrder)
+	}
+
 	fetcher, err := archivefetch.New(archivefetch.Config{
-		Seeder:    newSeeder(),
-		Catalog:   catalog,
-		FillLimit: fillLimit,
-		FillGap:   fillGap,
-		UrgentGap: time.Second,
-		Log:       func(line string) { globals.Logger.Info(line) },
+		Seeder:         newSeeder(),
+		Catalog:        catalog,
+		FillMostPlayed: fillOrder == "most-played",
+		FillLimit:      fillLimit,
+		FillGap:        fillGap,
+		UrgentGap:      time.Second,
+		Log:            func(line string) { globals.Logger.Info(line) },
 	})
 	if err != nil {
 		return err
@@ -538,7 +544,12 @@ func configureArchiveFetch() error {
 		globals.ArchiveFill = fetcher.Fill
 	}
 
-	globals.Logger.Infof("Courses players ask for that are not here are fetched from the archive. The background fill brings in up to %d more", fillLimit)
+	order := "picked at random from the whole archive"
+	if fillOrder == "most-played" {
+		order = "the most played first"
+	}
+
+	globals.Logger.Infof("Courses players ask for that are not here are fetched from the archive. The background fill brings in up to %d more, %s", fillLimit, order)
 
 	return nil
 }
@@ -567,7 +578,7 @@ func archiveCatalogFromEnv() (*archivefetch.Catalog, error) {
 		return nil, fmt.Errorf("PN_SMM_ARCHIVE_DB: %w", err)
 	}
 
-	globals.Logger.Infof("Courses are described from the archive's course database at %s, and the fill brings them in most played first", path)
+	globals.Logger.Infof("Courses are described from the archive's course database at %s", path)
 
 	return catalog, nil
 }

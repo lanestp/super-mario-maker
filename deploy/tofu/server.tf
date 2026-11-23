@@ -109,11 +109,11 @@ locals {
 
   plain_files_environment = local.plain_files ? { PN_SMM_FILE_HTTP_PORT = 80 } : {}
 
-  join_environment = var.invite_code == null ? {} : {
-    PN_SMM_INVITE_CODE        = var.invite_code
+  join_environment = !var.join_page ? {} : merge({
+    PN_SMM_JOIN_PAGE          = "1"
     PN_SMM_ACCOUNT_PUBLIC_URL = local.base_url
     PN_SMM_CONSOLE_PLUGIN     = "/home/go/app/smm-private-server.wps"
-  }
+  }, var.invite_code == null ? {} : { PN_SMM_INVITE_CODE = var.invite_code })
 
   tls_environment = local.use_tls ? {
     PN_SMM_ACCOUNT_HTTP_TLS_DOMAIN = var.domain_name

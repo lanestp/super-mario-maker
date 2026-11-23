@@ -314,7 +314,7 @@ func TestEveryConnectionFromOneAddressSharesItsTries(t *testing.T) {
 	}
 }
 
-func TestThePageIsNotMadeWithoutTheStoreTheInviteCodeAndTheAccountServer(t *testing.T) {
+func TestThePageIsNotMadeWithoutTheStoreAndTheAccountServer(t *testing.T) {
 	s := newSetup(t, nil)
 
 	good := joinpage.Config{Accounts: s.store, InviteCode: "let-me-in", AccountServerURL: "https://smm.example.com"}
@@ -324,7 +324,6 @@ func TestThePageIsNotMadeWithoutTheStoreTheInviteCodeAndTheAccountServer(t *test
 
 	for what, change := range map[string]func(config *joinpage.Config){
 		"no store":                  func(config *joinpage.Config) { config.Accounts = nil },
-		"no invite code":            func(config *joinpage.Config) { config.InviteCode = "" },
 		"no account server address": func(config *joinpage.Config) { config.AccountServerURL = "" },
 	} {
 		config := good
@@ -403,5 +402,50 @@ func TestATryOneWindowOldNoLongerCounts(t *testing.T) {
 	// * Before a whole window has passed since the earliest time, every try counts
 	if counted := joinpage.TriesStillCounted([]int64{math.MinInt64}, math.MinInt64+joinpage.JoinWindowMilliseconds-1); len(counted) != 1 {
 		t.Errorf("less than a window after the earliest time, %v count, want the one try", counted)
+	}
+}
+
+// * With no invite code, anyone may join, and the page does not ask for
+// * one; one sent anyway is ignored
+func TestWithNoInviteCodeAnyoneJoins(t *testing.T) {
+	s := newSetupWith(t, joinpage.Config{
+		AccountServerURL: "https://smm.example.com",
+		GameServerHost:   "203.0.113.4",
+		GameServerPort:   6004,
+	})
+
+	response, err := s.server.Client().Get(s.server.URL + joinpage.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	page, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+
+	if strings.Contains(strings.ToLower(string(page)), "invite") {
+		t.Error("the page asks for an invite code when there is none")
+	}
+
+	for _, values := range []url.Values{{"username": {"OpenPlayer1"}}, {"invite": {"anything"}, "username": {"OpenPlayer2"}}} {
+		if status, _, _ := s.post(t, "cemu", values); status != http.StatusOK {
+			t.Errorf("joining with %v answered %d, want 200", values, status)
+		}
+	}
+}
+
+// * With an invite code, the page asks for it
+func TestWithAnInviteCodeThePageAsksForIt(t *testing.T) {
+	s := newSetup(t, nil)
+
+	response, err := s.server.Client().Get(s.server.URL + joinpage.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	page, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+
+	if !strings.Contains(string(page), `name="invite"`) {
+		t.Error("the page does not ask for the invite code")
 	}
 }

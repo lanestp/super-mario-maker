@@ -99,7 +99,7 @@ code { font-size: 0.9em; background: var(--field); border: 1px solid var(--line)
 <main>
 	<header>
 		<h1>Join the Mario Maker server</h1>
-		<p class="lede">Pick how you play. You get a username here and a zip with everything to set up. You need an invite code from whoever runs the server.</p>
+		<p class="lede">Pick how you play. You get a username here and a zip with everything to set up.{{if .NeedsInvite}} You need an invite code from whoever runs the server.{{end}}</p>
 	</header>
 
 	<div class="choices">
@@ -108,8 +108,8 @@ code { font-size: 0.9em; background: var(--field); border: 1px solid var(--line)
 			<p class="for">On a computer, with the Cemu emulator and your own copy of the game.</p>
 			{{if eq .ErrorFor "cemu"}}<p class="error" role="alert">{{.Error}}</p>{{end}}
 			<form method="post" action="/join/cemu">
-				<label for="cemu-invite">Invite code</label>
-				<input id="cemu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "cemu"}}value="{{.Invite}}"{{end}}>
+				{{if .NeedsInvite}}<label for="cemu-invite">Invite code</label>
+				<input id="cemu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "cemu"}}value="{{.Invite}}"{{end}}>{{end}}
 				<label for="cemu-username">Username
 					<span class="hint">6 to 16 letters, numbers, dots, dashes and underscores. Shown to other players.</span>
 				</label>
@@ -132,8 +132,8 @@ code { font-size: 0.9em; background: var(--field); border: 1px solid var(--line)
 			<p class="for">On a Wii U running Aroma that already plays on Pretendo. Only Super Mario Maker comes here; everything else stays on Pretendo.</p>
 			{{if eq .ErrorFor "wiiu"}}<p class="error" role="alert">{{.Error}}</p>{{end}}
 			<form method="post" action="/join/wiiu">
-				<label for="wiiu-invite">Invite code</label>
-				<input id="wiiu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.Invite}}"{{end}}>
+				{{if .NeedsInvite}}<label for="wiiu-invite">Invite code</label>
+				<input id="wiiu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.Invite}}"{{end}}>{{end}}
 				<label for="wiiu-username">Username
 					<span class="hint">6 to 16 letters, numbers, dots, dashes and underscores.</span>
 				</label>

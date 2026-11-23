@@ -375,20 +375,21 @@ func ensureEventCourseMetadataFileExists() error {
 }
 
 // * Serves the page where players make an account, on the account API's
-// * port, when PN_SMM_INVITE_CODE says what they have to give to join
+// * port, when PN_SMM_JOIN_PAGE is 1. PN_SMM_INVITE_CODE, when set, is
+// * what they have to give to join, and also turns the page on
 func configureJoinPage() error {
 	inviteCode := strings.TrimSpace(os.Getenv("PN_SMM_INVITE_CODE"))
-	if inviteCode == "" {
+	if inviteCode == "" && strings.TrimSpace(os.Getenv("PN_SMM_JOIN_PAGE")) != "1" {
 		return nil
 	}
 
 	if globals.AccountAPI == nil {
-		return errors.New("PN_SMM_INVITE_CODE is set, but the join page is served on the account API's port, which needs PN_SMM_ACCOUNT_HTTP_PORT")
+		return errors.New("the join page is turned on, but it is served on the account API's port, which needs PN_SMM_ACCOUNT_HTTP_PORT")
 	}
 
 	accountServerURL := strings.TrimSpace(os.Getenv("PN_SMM_ACCOUNT_PUBLIC_URL"))
 	if accountServerURL == "" {
-		return errors.New("PN_SMM_INVITE_CODE is set, but PN_SMM_ACCOUNT_PUBLIC_URL is not. It is how players' Cemu reaches the account API, such as https://smm.example.com")
+		return errors.New("the join page is turned on, but PN_SMM_ACCOUNT_PUBLIC_URL is not set. It is how players' Cemu reaches the account API, such as https://smm.example.com")
 	}
 
 	// * Without the plugin, only Cemu is offered

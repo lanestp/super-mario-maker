@@ -29,8 +29,8 @@ output "connect_command" {
 }
 
 output "join_page_url" {
-  description = "Where players make an account, when there is an invite code"
-  value       = nonsensitive(var.invite_code == null) ? null : "${local.base_url}/join"
+  description = "Where players make an account, when the join page is served"
+  value       = var.join_page ? "${local.base_url}/join" : null
 }
 
 output "game_server_port" {

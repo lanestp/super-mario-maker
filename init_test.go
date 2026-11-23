@@ -680,7 +680,7 @@ func TestFilesCanAlsoBeServedWithoutTLSOnAPortOfTheirOwn(t *testing.T) {
 	}
 }
 
-func TestTheJoinPageIsOnlyServedWithAnInviteCode(t *testing.T) {
+func TestTheJoinPageIsOnlyServedWhenTurnedOn(t *testing.T) {
 	startClean(t)
 	configuredAccountAPI(t)
 	set(t, "PN_SMM_ACCOUNT_PUBLIC_URL", "https://smm.example.com")
@@ -690,7 +690,27 @@ func TestTheJoinPageIsOnlyServedWithAnInviteCode(t *testing.T) {
 	}
 
 	if globals.AccountAPI.Join != nil {
-		t.Error("the join page is served without PN_SMM_INVITE_CODE")
+		t.Error("the join page is served without PN_SMM_JOIN_PAGE or PN_SMM_INVITE_CODE")
+	}
+}
+
+// * Turned on with no invite code, anyone may join, and the page does
+// * not ask for one
+func TestTheJoinPageCanBeOpenToAnyone(t *testing.T) {
+	startClean(t)
+	configuredAccountAPI(t)
+	set(t, "PN_SMM_JOIN_PAGE", "1", "PN_SMM_ACCOUNT_PUBLIC_URL", "https://smm.example.com")
+
+	if err := configureJoinPage(); err != nil {
+		t.Fatal(err)
+	}
+
+	if globals.AccountAPI.Join == nil {
+		t.Fatal("the join page is not served with PN_SMM_JOIN_PAGE=1")
+	}
+
+	if page := joinPage(t); strings.Contains(strings.ToLower(page), "invite") {
+		t.Error("the page asks for an invite code when there is none")
 	}
 }
 
@@ -698,7 +718,7 @@ func TestTheJoinPageNeedsTheAccountAPI(t *testing.T) {
 	startClean(t)
 	set(t, "PN_SMM_INVITE_CODE", "mushroom", "PN_SMM_ACCOUNT_PUBLIC_URL", "https://smm.example.com")
 
-	wantError(t, configureJoinPage(), "PN_SMM_INVITE_CODE is set, but the join page is served on the account API's port, which needs PN_SMM_ACCOUNT_HTTP_PORT")
+	wantError(t, configureJoinPage(), "the join page is turned on, but it is served on the account API's port, which needs PN_SMM_ACCOUNT_HTTP_PORT")
 }
 
 func TestTheJoinPageNeedsTheAddressCemuReachesTheAccountAPIBy(t *testing.T) {
@@ -706,7 +726,7 @@ func TestTheJoinPageNeedsTheAddressCemuReachesTheAccountAPIBy(t *testing.T) {
 	configuredAccountAPI(t)
 	set(t, "PN_SMM_INVITE_CODE", "mushroom")
 
-	wantError(t, configureJoinPage(), "PN_SMM_INVITE_CODE is set, but PN_SMM_ACCOUNT_PUBLIC_URL is not. It is how players' Cemu reaches the account API, such as https://smm.example.com")
+	wantError(t, configureJoinPage(), "the join page is turned on, but PN_SMM_ACCOUNT_PUBLIC_URL is not set. It is how players' Cemu reaches the account API, such as https://smm.example.com")
 }
 
 func TestAConsolePluginThatCanNotBeReadIsRefused(t *testing.T) {

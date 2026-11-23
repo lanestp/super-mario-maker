@@ -61,11 +61,16 @@ variable "root_ca_file" {
   default     = "certificates/lets-encrypt-root-yr.pem"
 }
 
+variable "join_page" {
+  description = "Serve the page at /join where players make an account"
+  type        = bool
+  default     = true
+}
+
 variable "invite_code" {
   description = <<-EOT
-    Code players give on the join page at /join to make an account. Left
-    out, there is no join page. Kept in the state, so treat the state as
-    secret
+    Code players have to give on the join page to make an account. Left
+    out, anyone may join. Kept in the state, so treat the state as secret
   EOT
   type        = string
   default     = null

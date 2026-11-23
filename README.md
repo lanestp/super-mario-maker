@@ -4,7 +4,7 @@ A server for running your own Super Mario Maker (Wii U) world: Course World, 100
 
 It is a fork of [Pretendo Network's Super Mario Maker server](https://github.com/PretendoNetwork/super-mario-maker), and keeps everything that makes it work with the real game. On top of it, it adds what a small private server needs to stand on its own:
 
-- **Its own accounts and account server**, so no Pretendo or Nintendo account server is needed. Players join on a web page with an invite code and download a ready-made setup.
+- **Its own accounts and account server**, so no Pretendo or Nintendo account server is needed. Players join on a web page and download a ready-made setup.
 - **SQLite or Postgres**, chosen at start. A private server needs no database server.
 - **Course files that never leave the server unchecked.** Games upload to and download from the server itself, which keeps them in a private S3 bucket. Everything a game reaches over HTTP is on one port, served over TLS with a certificate fetched from Let's Encrypt, old TLS included for the console.
 - **100 Mario and Course World by difficulty**, picking courses by how often attempts at them fail, as the game asks.
@@ -29,7 +29,7 @@ It is a fork of [Pretendo Network's Super Mario Maker server](https://github.com
 | --- | --- |
 | Try everything on one machine | [Trying it on one machine](#trying-it-on-one-machine) |
 | Run a server others can join | [deploy/tofu](deploy/tofu) |
-| Let players join | `PN_SMM_INVITE_CODE`, then send them to `/join` on the server |
+| Let players join | `PN_SMM_JOIN_PAGE=1` (and `PN_SMM_INVITE_CODE` to ask for a code), then send them to `/join` on the server |
 | Bring in archived courses | [Bringing in courses from the archive](deploy/tofu/README.md#bringing-in-courses-from-the-archive) |
 | Play on a Wii U | [console-plugin](console-plugin) |
 
@@ -195,8 +195,9 @@ All configuration options are handled via environment variables
 | `PN_SMM_FILE_HTTP_PORT`             | Port to also serve course files on without TLS, and nothing else. For emulators without a real console's certificate files, which can not reach files over TLS. Point `PN_SMM_FILE_BASE_URL` at it | No |
 | `PN_SMM_FILE_ROOT_CA`               | Root certificate, as a PEM or DER file, that games are told to check this server against for files. A game trusts only this, not its own list. Needed when `PN_SMM_FILE_BASE_URL` is HTTPS: for a Let's Encrypt certificate it is their root, not the server's own certificate | No |
 | `PN_SMM_FILE_URL_SECRET`            | Secret that signs the links to files           | No (A new one is made at each start) |
-| `PN_SMM_INVITE_CODE`                | When set, serves a page at `/join` on the account API's port where players with this code make an account and download what they need to play | No (No page) |
-| `PN_SMM_ACCOUNT_PUBLIC_URL`         | How players' Cemu reaches the account API, such as `https://smm.example.com`. Needed for the join page | With `PN_SMM_INVITE_CODE` |
+| `PN_SMM_JOIN_PAGE`                  | `1` serves a page at `/join` on the account API's port where players make an account and download what they need to play | No (No page) |
+| `PN_SMM_INVITE_CODE`                | When set, players have to give this code on the join page. It also turns the page on | No (anyone may join) |
+| `PN_SMM_ACCOUNT_PUBLIC_URL`         | How players' Cemu reaches the account API, such as `https://smm.example.com`. Needed for the join page | With the join page |
 | `PN_SMM_CONSOLE_PLUGIN`             | The built Wii U plugin, which the join page hands to Wii U players. The server image has it at `/home/go/app/smm-private-server.wps` | No (Only Cemu is offered) |
 | `PN_SMM_IMPORT_TOKEN`               | When set, serves the import service, which `smm-import-archive` sends archived courses to, with this as its token | No |
 | `PN_SMM_IMPORT_ADDRESS`             | Loopback address to serve the import service on | No (`127.0.0.1:8384`) |

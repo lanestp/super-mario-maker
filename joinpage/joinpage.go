@@ -1,4 +1,4 @@
-// Package joinpage serves a page where a player with an invite code makes
+// Package joinpage serves a page where a player makes
 // an account and downloads what they need to play: a bundle for the Cemu
 // emulator, or for a Wii U that keeps using another network for everything
 // but Super Mario Maker
@@ -42,7 +42,8 @@ var page = template.Must(template.ParseFS(pageFiles, "page.html"))
 type Config struct {
 	Accounts store.Store
 
-	// InviteCode is what a player has to give to join
+	// InviteCode, when set, is what a player has to give to join. Empty,
+	// anyone may join, and the page does not ask for one
 	InviteCode string
 
 	// AccountServerURL is how Cemu reaches the account API, such as
@@ -70,8 +71,8 @@ type joinPage struct {
 
 // Handler serves the page at Path, and the two forms on it
 func Handler(config Config) (http.Handler, error) {
-	if config.Accounts == nil || config.InviteCode == "" || config.AccountServerURL == "" {
-		return nil, errors.New("joinpage: the store, an invite code and the account server's address are needed")
+	if config.Accounts == nil || config.AccountServerURL == "" {
+		return nil, errors.New("joinpage: the store and the account server's address are needed")
 	}
 
 	if config.Now == nil {
@@ -111,6 +112,8 @@ type view struct {
 	Username string
 	PID      string
 	Invite   string
+	// NeedsInvite is whether the page asks for an invite code
+	NeedsInvite bool
 }
 
 func (j *joinPage) show(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +122,7 @@ func (j *joinPage) show(w http.ResponseWriter, r *http.Request) {
 
 func (j *joinPage) render(w http.ResponseWriter, status int, v view) {
 	v.WiiU = len(j.config.Plugin) > 0
+	v.NeedsInvite = j.config.InviteCode != ""
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
@@ -128,8 +132,8 @@ func (j *joinPage) render(w http.ResponseWriter, status int, v view) {
 	}
 }
 
-// * Reads a form, and checks the address may try and the invite code.
-// * Returns false when it has already answered
+// * Reads a form, and checks the address may try and the invite code,
+// * when there is one. Returns false when it has already answered
 func (j *joinPage) admit(w http.ResponseWriter, r *http.Request, form string) (view, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 
@@ -153,7 +157,7 @@ func (j *joinPage) admit(w http.ResponseWriter, r *http.Request, form string) (v
 		return v, false
 	}
 
-	if !j.inviteMatches(v.Invite) {
+	if j.config.InviteCode != "" && !j.inviteMatches(v.Invite) {
 		v.Error = "That invite code is not right."
 		j.render(w, http.StatusForbidden, v)
 

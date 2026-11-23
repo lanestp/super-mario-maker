@@ -110,13 +110,37 @@ func (c *Catalog) MostPlayed(skip int64, limit int) ([]uint64, error) {
 		LIMIT ? OFFSET ?`, store.FirstDataID, store.ImportedDataIDLimit, limit, skip)
 }
 
-// Newest lists up to limit course IDs, the most recently uploaded first.
-// Event courses, and IDs the server keeps for itself, are left out
-func (c *Catalog) Newest(limit int) ([]uint64, error) {
-	return c.ids(`SELECT course_id FROM Course
-		WHERE is_event_course = 0 AND course_id >= ? AND course_id < ?
-		ORDER BY upload_time DESC, course_id DESC
-		LIMIT ?`, store.FirstDataID, store.ImportedDataIDLimit, limit)
+// Random picks a course at random: the first one at or after a random
+// ID between the lowest and highest IDs in the catalog. randomInt gives
+// a number from 0 to n-1. Event courses, and IDs the server keeps for
+// itself, are left out. 0 when there is none to pick
+func (c *Catalog) Random(randomInt func(n int64) int64) (uint64, error) {
+	var lowest, highest int64
+
+	err := c.db.QueryRow(`SELECT COALESCE(MIN(course_id), 0), COALESCE(MAX(course_id), 0) FROM Course
+		WHERE course_id >= ? AND course_id < ?`, store.FirstDataID, store.ImportedDataIDLimit).Scan(&lowest, &highest)
+	if err != nil || highest == 0 {
+		return 0, err
+	}
+
+	from := lowest + randomInt(highest-lowest+1)
+
+	for _, start := range []int64{from, lowest} {
+		var id int64
+
+		err := c.db.QueryRow(`SELECT course_id FROM Course
+			WHERE course_id >= ? AND course_id < ? AND is_event_course = 0
+			ORDER BY course_id LIMIT 1`, start, store.ImportedDataIDLimit).Scan(&id)
+		if err == nil {
+			return uint64(id), nil
+		}
+
+		if !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+	}
+
+	return 0, nil
 }
 
 func (c *Catalog) ids(query string, args ...any) ([]uint64, error) {

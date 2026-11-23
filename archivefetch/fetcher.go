@@ -102,11 +102,11 @@ type Fetcher struct {
 	inFlight map[uint64]*fetch
 	missed   map[uint64]time.Time
 
-	// * The catalog's newest courses, read once, and the run bringing in
-	// * the ones not here yet, when there is one
-	newestMutex sync.Mutex
-	newest      []uint64
-	newestRun   chan struct{}
+	// * The courses brought in for players, the latest last, and the run
+	// * bringing in a batch for New Arrivals, when there is one
+	arrivalsMutex sync.Mutex
+	arrived       []uint64
+	arrivalsRun   chan struct{}
 }
 
 type fetch struct {
@@ -174,13 +174,6 @@ func New(config Config) (*Fetcher, error) {
 		missed:   map[uint64]time.Time{},
 	}
 
-	// * The newest courses are read ahead, as it takes a few seconds and a
-	// * game is waiting the first time New Arrivals is asked for. Nothing
-	// * is brought in until then
-	if config.Catalog != nil {
-		go f.readNewest()
-	}
-
 	return f, nil
 }
 
@@ -245,6 +238,7 @@ func (f *Fetcher) run(dataID uint64, current *fetch) {
 	f.mutex.Unlock()
 
 	if outcome == "" {
+		f.arrive(dataID)
 		f.config.Log(fmt.Sprintf("Brought in course %d from the archive, as a player asked for it", dataID))
 	} else if outcome != store.ImportNotArchived {
 		f.config.Log(fmt.Sprintf("Course %d could not be brought in from the archive (%s): %s", dataID, outcome, detail))
@@ -535,61 +529,53 @@ func (f *Fetcher) fillOne(ctx context.Context, dataID uint64) (brought, again bo
 	return outcome == "", outcome == store.ImportFailed
 }
 
-// * How many of the archive's newest courses New Arrivals brings in: one
-// * list's worth
-const newArrivals = 100
+// * How many random courses each visit to New Arrivals brings in, and
+// * how many arrivals are remembered: one list's worth
+const (
+	arrivalsBatch = 20
+	maxArrivals   = 100
+)
 
-// NewArrivals brings in the archive's newest courses that are not here
-// yet, newest first, so that New Arrivals lists them once they are. It
-// waits until ctx ends at the most; the run carries on after, and a call
-// while one is going waits on it. Only with a catalog
+// NewArrivals brings in a batch of random courses from the whole archive
+// that are not here yet, one at a time, as if a player asked for each.
+// It waits until ctx ends at the most; the batch carries on after, and a
+// call while one is going waits on it. Only with a catalog
 func (f *Fetcher) NewArrivals(ctx context.Context) {
 	if f.config.Catalog == nil {
 		return
 	}
 
-	if !f.readNewest() {
-		return
-	}
+	f.arrivalsMutex.Lock()
 
-	f.newestMutex.Lock()
-
-	run := f.newestRun
+	run := f.arrivalsRun
 
 	if run == nil {
-		var missing []uint64
+		batch := f.randomMissing(arrivalsBatch)
 
-		for _, id := range f.newest {
-			if !f.here(id) {
-				missing = append(missing, id)
-			}
-		}
-
-		if len(missing) == 0 {
-			f.newestMutex.Unlock()
+		if len(batch) == 0 {
+			f.arrivalsMutex.Unlock()
 			return
 		}
 
 		run = make(chan struct{})
-		f.newestRun = run
+		f.arrivalsRun = run
 
-		f.config.Log(fmt.Sprintf("New Arrivals: bringing in %d of the archive's %d newest courses", len(missing), len(f.newest)))
+		f.config.Log(fmt.Sprintf("New Arrivals: bringing in %d random courses from the archive", len(batch)))
 
 		go func() {
-			// * One at a time, each as if a player asked for it
-			for _, id := range missing {
+			for _, id := range batch {
 				f.Fetch(context.Background(), id)
 			}
 
-			f.newestMutex.Lock()
-			f.newestRun = nil
-			f.newestMutex.Unlock()
+			f.arrivalsMutex.Lock()
+			f.arrivalsRun = nil
+			f.arrivalsMutex.Unlock()
 
 			close(run)
 		}()
 	}
 
-	f.newestMutex.Unlock()
+	f.arrivalsMutex.Unlock()
 
 	select {
 	case <-run:
@@ -597,24 +583,63 @@ func (f *Fetcher) NewArrivals(ctx context.Context) {
 	}
 }
 
-// * Reads the catalog's newest courses, once. Says whether they are read
-func (f *Fetcher) readNewest() bool {
-	f.newestMutex.Lock()
-	defer f.newestMutex.Unlock()
+// * Up to count random courses from the catalog that are not here and
+// * have not failed lately
+func (f *Fetcher) randomMissing(count int) []uint64 {
+	picked := map[uint64]bool{}
+	var batch []uint64
 
-	if f.newest != nil {
-		return true
+	for tries := 0; tries < count*5 && len(batch) < count; tries++ {
+		id, err := f.config.Catalog.Random(f.config.RandomInt)
+		if err != nil {
+			f.config.Log(fmt.Sprintf("A random course could not be picked from the catalog: %v", err))
+			break
+		}
+
+		if id == 0 || picked[id] || f.here(id) || f.missedLately(id) {
+			continue
+		}
+
+		picked[id] = true
+		batch = append(batch, id)
 	}
 
-	ids, err := f.config.Catalog.Newest(newArrivals)
-	if err != nil {
-		f.config.Log(fmt.Sprintf("The catalog's newest courses could not be read: %v", err))
-		return false
+	return batch
+}
+
+func (f *Fetcher) missedLately(dataID uint64) bool {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	until, ok := f.missed[dataID]
+
+	return ok && time.Now().Before(until)
+}
+
+// Arrivals lists up to limit of the courses most recently brought in for
+// players, the latest first. Kept only while the server runs
+func (f *Fetcher) Arrivals(limit int) []uint64 {
+	f.arrivalsMutex.Lock()
+	defer f.arrivalsMutex.Unlock()
+
+	var latest []uint64
+
+	for i := len(f.arrived) - 1; i >= 0 && len(latest) < limit; i-- {
+		latest = append(latest, f.arrived[i])
 	}
 
-	f.newest = ids
+	return latest
+}
 
-	return true
+func (f *Fetcher) arrive(dataID uint64) {
+	f.arrivalsMutex.Lock()
+	defer f.arrivalsMutex.Unlock()
+
+	f.arrived = append(f.arrived, dataID)
+
+	if len(f.arrived) > maxArrivals {
+		f.arrived = f.arrived[len(f.arrived)-maxArrivals:]
+	}
 }
 
 func (f *Fetcher) pause(ctx context.Context) {

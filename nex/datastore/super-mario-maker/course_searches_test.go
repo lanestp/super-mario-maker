@@ -1,6 +1,7 @@
 package nex_datastore_super_mario_maker
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
@@ -406,5 +407,41 @@ func TestRecommendedCoursesStillSendWhatWasFoundWhenFillingUpFails(t *testing.T)
 
 	if got := recommended(t, 5, oneHundredMarioEasy); !sameIDs(got, inRange) {
 		t.Errorf("got %v, want the one course found before filling up failed", got)
+	}
+}
+
+// * With the archive's catalog, New Arrivals is the courses that just
+// * arrived from the archive, the latest first, then random courses that
+// * are here, each listed once
+func TestNewArrivalsListsTheLatestArrivalsThenRandomCourses(t *testing.T) {
+	server := setUp(t)
+
+	var courses []types.UInt64
+	for range 6 {
+		courses = append(courses, addRankedCourse(t, server.store, object{}, 0))
+	}
+
+	brought := 0
+	globals.ArchiveNewArrivals = func(context.Context) { brought++ }
+	globals.ArchiveArrivals = func(limit int) []uint64 { return []uint64{uint64(courses[4]), uint64(courses[1])}[:min(limit, 2)] }
+	t.Cleanup(func() { globals.ArchiveNewArrivals, globals.ArchiveArrivals = nil, nil })
+
+	listed := dataIDsOf(search(t, LatestCourseSearchObject, datastore_super_mario_maker.MethodLatestCourseSearchObject, searchParam(0, 4, 0), extra()))
+
+	if len(listed) != 4 || listed[0] != courses[4] || listed[1] != courses[1] {
+		t.Fatalf("listed %v, want %d and %d first, then two more", listed, courses[4], courses[1])
+	}
+
+	if !sameIDs(listed[:2], courses[4], courses[1]) || listed[2] == courses[4] || listed[2] == courses[1] || listed[3] == courses[4] || listed[3] == courses[1] || listed[2] == listed[3] {
+		t.Errorf("listed %v, want each course once", listed)
+	}
+
+	if brought != 1 {
+		t.Errorf("brought in %d batches, want one for the first page", brought)
+	}
+
+	// * A later page is random courses, and brings nothing in
+	if later := search(t, LatestCourseSearchObject, datastore_super_mario_maker.MethodLatestCourseSearchObject, searchParam(4, 4, 0), extra()); len(later) != 4 || brought != 1 {
+		t.Errorf("a later page listed %d courses and brought in %d batches, want 4 and still one", len(later), brought)
 	}
 }

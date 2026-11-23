@@ -98,11 +98,17 @@ func LatestCourseSearchObject(err error, packet nex.PacketInterface, callID uint
 
 	offset, length := searchRange(param.ResultRange)
 
-	// * The archive's newest courses are brought in first, so the list
-	// * reaches past what was imported. What is not here yet in a few
-	// * seconds shows up the next time
-	if offset == 0 {
-		globals.NewArrivalsFromArchive()
+	// * With the archive's catalog, nobody uploads any more, so New
+	// * Arrivals is courses that just arrived from the archive: a batch
+	// * of random ones is brought in each time it is opened, the latest
+	// * are listed first, and random courses that are here fill the rest
+	if globals.ArchiveArrivals != nil {
+		dataIDs, nexError := newArrivals(offset, length)
+		if nexError != nil {
+			return nil, nexError
+		}
+
+		return courseSearchResponse("LatestCourseSearchObject", datastore_super_mario_maker.MethodLatestCourseSearchObject, callID, dataIDs, param, extraData), nil
 	}
 
 	dataIDs, nexError := globals.Store.GetLatestCourseObjectIDs(offset, length)
@@ -111,6 +117,42 @@ func LatestCourseSearchObject(err error, packet nex.PacketInterface, callID uint
 	}
 
 	return courseSearchResponse("LatestCourseSearchObject", datastore_super_mario_maker.MethodLatestCourseSearchObject, callID, dataIDs, param, extraData), nil
+}
+
+// * Courses just brought in from the archive, the latest first, then
+// * random courses that are here. A later page is random courses only
+func newArrivals(offset, length int) (types.List[types.UInt64], *nex.Error) {
+	dataIDs := types.NewList[types.UInt64]()
+	listed := map[types.UInt64]bool{}
+
+	if offset == 0 {
+		globals.NewArrivalsFromArchive()
+
+		for _, id := range globals.ArchiveArrivals(length) {
+			dataIDs = append(dataIDs, types.UInt64(id))
+			listed[types.UInt64(id)] = true
+		}
+	}
+
+	if len(dataIDs) < length {
+		random, nexError := globals.Store.GetRandomCoursesWithLimit(length)
+		if nexError != nil {
+			return nil, nexError
+		}
+
+		for _, result := range random {
+			if len(dataIDs) == length {
+				break
+			}
+
+			if id := result.MetaInfo.DataID; !listed[id] {
+				dataIDs = append(dataIDs, id)
+				listed[id] = true
+			}
+		}
+	}
+
+	return dataIDs, nil
 }
 
 // BestScoreRateCourseSearchObject lists courses, most stars first.

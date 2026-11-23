@@ -302,42 +302,59 @@ func TestWithACatalogTheFileIsFoundThroughTheWaybackMachinesOwnIndex(t *testing.
 	}
 }
 
-func TestTheCatalogListsTheNewestFirst(t *testing.T) {
-	catalog := newCatalog(t)
+// * Random numbers that walk the catalog's IDs from the lowest: the n-th
+// * pick lands n IDs past the lowest
+func walking() func(n int64) int64 {
+	next := int64(0)
 
-	// * All but one share an upload time, so the higher ID comes first,
-	// * and the one uploaded at time 0 comes last. The event course is
-	// * left out
-	ids, err := catalog.Newest(20)
-	if err != nil || len(ids) != 11 || ids[0] != firstCourse+9 || ids[9] != firstCourse || ids[10] != 2000050 {
-		t.Errorf("got %v (%v), want 2000009 down to 2000000, then 2000050", ids, err)
+	return func(n int64) int64 {
+		defer func() { next++ }()
+		return next % n
 	}
 }
 
-func TestNewArrivalsBringsInTheNewestCourses(t *testing.T) {
+func TestTheCatalogPicksTheNextCourseAtOrAfterARandomID(t *testing.T) {
 	catalog := newCatalog(t)
-	s := newSetup(t, func(config *Config) { config.Catalog = catalog })
 
-	if s.here(firstCourse + 9) {
-		t.Fatal("a course was here before New Arrivals was asked for")
+	// * The lowest ID the server could import from is 2000000 here: the
+	// * event course 930001 is below the range
+	cases := map[int64]uint64{0: firstCourse, 4: firstCourse + 4, 10: 2000050, 50: 2000050}
+
+	for offset, want := range cases {
+		got, err := catalog.Random(func(int64) int64 { return offset })
+		if err != nil || got != want {
+			t.Errorf("a random offset of %d picked %d (%v), want %d", offset, got, err, want)
+		}
+	}
+}
+
+func TestNewArrivalsBringsInRandomCoursesAndListsTheLatestFirst(t *testing.T) {
+	catalog := newCatalog(t)
+	s := newSetup(t, func(config *Config) {
+		config.Catalog = catalog
+		config.RandomInt = walking()
+	})
+
+	if len(s.fetcher.Arrivals(10)) != 0 {
+		t.Fatal("arrivals before anything was brought in")
 	}
 
 	s.fetcher.NewArrivals(context.Background())
 
-	// * Every course with a file, newest first; 2000003 and 2000007 have
-	// * none, and 2000050 has no capture
+	// * The walk picks 2000000 to 2000009 and then 2000050 for every
+	// * later ID: all eleven are tried, and the nine with a file arrive
 	for id := uint64(firstCourse); id <= firstCourse+9; id++ {
 		if want := id != firstCourse+3 && id != firstCourse+7; s.here(id) != want {
 			t.Errorf("course %d here: %v, want %v", id, s.here(id), want)
 		}
 	}
 
-	if first := s.archive.cdx[0]; first != firstCourse+9 {
-		t.Errorf("looked up %d first, want the newest, %d", first, firstCourse+9)
+	arrivals := s.fetcher.Arrivals(3)
+	if fmt.Sprint(arrivals) != fmt.Sprint([]uint64{firstCourse + 9, firstCourse + 8, firstCourse + 6}) {
+		t.Errorf("the latest arrivals are %v, want the last three brought in, latest first", arrivals)
 	}
 
-	// * Asked again, there is nothing left to bring in. The ones with no
-	// * file are not asked for again for a while
+	// * Opened again, nothing in the catalog is left to bring in
 	asked := len(s.archive.cdx)
 	s.fetcher.NewArrivals(context.Background())
 
@@ -346,9 +363,24 @@ func TestNewArrivalsBringsInTheNewestCourses(t *testing.T) {
 	}
 }
 
+func TestOnlyTheLatestArrivalsAreRemembered(t *testing.T) {
+	f := &Fetcher{}
+
+	for id := uint64(1); id <= maxArrivals+5; id++ {
+		f.arrive(id)
+	}
+
+	if all := f.Arrivals(1000); len(all) != maxArrivals || all[0] != maxArrivals+5 || all[len(all)-1] != 6 {
+		t.Errorf("remembered %d arrivals from %d to %d, want the latest %d", len(all), all[0], all[len(all)-1], maxArrivals)
+	}
+}
+
 func TestNewArrivalsAnswersInTimeAndCarriesOn(t *testing.T) {
 	catalog := newCatalog(t)
-	s := newSetup(t, func(config *Config) { config.Catalog = catalog })
+	s := newSetup(t, func(config *Config) {
+		config.Catalog = catalog
+		config.RandomInt = walking()
+	})
 
 	s.archive.mutex.Lock()
 	s.archive.hold = make(chan struct{})
@@ -369,11 +401,11 @@ func TestNewArrivalsAnswersInTimeAndCarriesOn(t *testing.T) {
 	s.archive.hold = nil
 	s.archive.mutex.Unlock()
 
-	// * A second ask waits on the same run, which carries on
+	// * A second ask waits on the same batch, which carries on
 	s.fetcher.NewArrivals(context.Background())
 
-	if !s.here(firstCourse + 9) {
-		t.Error("the newest course was not brought in after all")
+	if !s.here(firstCourse) {
+		t.Error("the first course picked was not brought in after all")
 	}
 }
 

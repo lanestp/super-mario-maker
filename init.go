@@ -528,6 +528,10 @@ func configureArchiveFetch() error {
 
 	globals.FetchFromArchive = fetcher.Fetch
 
+	if catalog != nil {
+		globals.ArchiveNewArrivals = fetcher.NewArrivals
+	}
+
 	if fillLimit > 0 {
 		globals.ArchiveFill = fetcher.Fill
 	}

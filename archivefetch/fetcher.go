@@ -101,6 +101,12 @@ type Fetcher struct {
 	mutex    sync.Mutex
 	inFlight map[uint64]*fetch
 	missed   map[uint64]time.Time
+
+	// * The catalog's newest courses, read once, and the run bringing in
+	// * the ones not here yet, when there is one
+	newestMutex sync.Mutex
+	newest      []uint64
+	newestRun   chan struct{}
 }
 
 type fetch struct {
@@ -154,7 +160,7 @@ func New(config Config) (*Fetcher, error) {
 		config.RetryAfter = func(outcome string) time.Duration { return missFor[outcome] }
 	}
 
-	return &Fetcher{
+	f := &Fetcher{
 		config: config,
 		client: &client{
 			http:    config.HTTP,
@@ -166,7 +172,16 @@ func New(config Config) (*Fetcher, error) {
 		},
 		inFlight: map[uint64]*fetch{},
 		missed:   map[uint64]time.Time{},
-	}, nil
+	}
+
+	// * The newest courses are read ahead, as it takes a few seconds and a
+	// * game is waiting the first time New Arrivals is asked for. Nothing
+	// * is brought in until then
+	if config.Catalog != nil {
+		go f.readNewest()
+	}
+
+	return f, nil
 }
 
 // Fetch brings in a course a player asked for, if the archive has it,
@@ -518,6 +533,88 @@ func (f *Fetcher) fillOne(ctx context.Context, dataID uint64) (brought, again bo
 	outcome, _ := f.bringInEntry(ctx, *entry, false)
 
 	return outcome == "", outcome == store.ImportFailed
+}
+
+// * How many of the archive's newest courses New Arrivals brings in: one
+// * list's worth
+const newArrivals = 100
+
+// NewArrivals brings in the archive's newest courses that are not here
+// yet, newest first, so that New Arrivals lists them once they are. It
+// waits until ctx ends at the most; the run carries on after, and a call
+// while one is going waits on it. Only with a catalog
+func (f *Fetcher) NewArrivals(ctx context.Context) {
+	if f.config.Catalog == nil {
+		return
+	}
+
+	if !f.readNewest() {
+		return
+	}
+
+	f.newestMutex.Lock()
+
+	run := f.newestRun
+
+	if run == nil {
+		var missing []uint64
+
+		for _, id := range f.newest {
+			if !f.here(id) {
+				missing = append(missing, id)
+			}
+		}
+
+		if len(missing) == 0 {
+			f.newestMutex.Unlock()
+			return
+		}
+
+		run = make(chan struct{})
+		f.newestRun = run
+
+		f.config.Log(fmt.Sprintf("New Arrivals: bringing in %d of the archive's %d newest courses", len(missing), len(f.newest)))
+
+		go func() {
+			// * One at a time, each as if a player asked for it
+			for _, id := range missing {
+				f.Fetch(context.Background(), id)
+			}
+
+			f.newestMutex.Lock()
+			f.newestRun = nil
+			f.newestMutex.Unlock()
+
+			close(run)
+		}()
+	}
+
+	f.newestMutex.Unlock()
+
+	select {
+	case <-run:
+	case <-ctx.Done():
+	}
+}
+
+// * Reads the catalog's newest courses, once. Says whether they are read
+func (f *Fetcher) readNewest() bool {
+	f.newestMutex.Lock()
+	defer f.newestMutex.Unlock()
+
+	if f.newest != nil {
+		return true
+	}
+
+	ids, err := f.config.Catalog.Newest(newArrivals)
+	if err != nil {
+		f.config.Log(fmt.Sprintf("The catalog's newest courses could not be read: %v", err))
+		return false
+	}
+
+	f.newest = ids
+
+	return true
 }
 
 func (f *Fetcher) pause(ctx context.Context) {

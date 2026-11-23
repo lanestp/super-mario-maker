@@ -98,6 +98,13 @@ func LatestCourseSearchObject(err error, packet nex.PacketInterface, callID uint
 
 	offset, length := searchRange(param.ResultRange)
 
+	// * The archive's newest courses are brought in first, so the list
+	// * reaches past what was imported. What is not here yet in a few
+	// * seconds shows up the next time
+	if offset == 0 {
+		globals.NewArrivalsFromArchive()
+	}
+
 	dataIDs, nexError := globals.Store.GetLatestCourseObjectIDs(offset, length)
 	if nexError != nil {
 		return nil, nexError

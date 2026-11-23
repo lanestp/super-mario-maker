@@ -301,3 +301,88 @@ func TestWithACatalogTheFileIsFoundThroughTheWaybackMachinesOwnIndex(t *testing.
 		t.Errorf("kept %+v, want the course with no capture as not archived", attempts)
 	}
 }
+
+func TestTheCatalogListsTheNewestFirst(t *testing.T) {
+	catalog := newCatalog(t)
+
+	// * All but one share an upload time, so the higher ID comes first,
+	// * and the one uploaded at time 0 comes last. The event course is
+	// * left out
+	ids, err := catalog.Newest(20)
+	if err != nil || len(ids) != 11 || ids[0] != firstCourse+9 || ids[9] != firstCourse || ids[10] != 2000050 {
+		t.Errorf("got %v (%v), want 2000009 down to 2000000, then 2000050", ids, err)
+	}
+}
+
+func TestNewArrivalsBringsInTheNewestCourses(t *testing.T) {
+	catalog := newCatalog(t)
+	s := newSetup(t, func(config *Config) { config.Catalog = catalog })
+
+	if s.here(firstCourse + 9) {
+		t.Fatal("a course was here before New Arrivals was asked for")
+	}
+
+	s.fetcher.NewArrivals(context.Background())
+
+	// * Every course with a file, newest first; 2000003 and 2000007 have
+	// * none, and 2000050 has no capture
+	for id := uint64(firstCourse); id <= firstCourse+9; id++ {
+		if want := id != firstCourse+3 && id != firstCourse+7; s.here(id) != want {
+			t.Errorf("course %d here: %v, want %v", id, s.here(id), want)
+		}
+	}
+
+	if first := s.archive.cdx[0]; first != firstCourse+9 {
+		t.Errorf("looked up %d first, want the newest, %d", first, firstCourse+9)
+	}
+
+	// * Asked again, there is nothing left to bring in. The ones with no
+	// * file are not asked for again for a while
+	asked := len(s.archive.cdx)
+	s.fetcher.NewArrivals(context.Background())
+
+	if len(s.archive.cdx) != asked {
+		t.Errorf("asked the Wayback Machine's index %d more times, want none", len(s.archive.cdx)-asked)
+	}
+}
+
+func TestNewArrivalsAnswersInTimeAndCarriesOn(t *testing.T) {
+	catalog := newCatalog(t)
+	s := newSetup(t, func(config *Config) { config.Catalog = catalog })
+
+	s.archive.mutex.Lock()
+	s.archive.hold = make(chan struct{})
+	s.archive.mutex.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	started := time.Now()
+	s.fetcher.NewArrivals(ctx)
+
+	if waited := time.Since(started); waited > time.Second {
+		t.Fatalf("New Arrivals waited %s, want it to answer when its time is up", waited)
+	}
+
+	s.archive.mutex.Lock()
+	close(s.archive.hold)
+	s.archive.hold = nil
+	s.archive.mutex.Unlock()
+
+	// * A second ask waits on the same run, which carries on
+	s.fetcher.NewArrivals(context.Background())
+
+	if !s.here(firstCourse + 9) {
+		t.Error("the newest course was not brought in after all")
+	}
+}
+
+func TestNewArrivalsDoesNothingWithoutACatalog(t *testing.T) {
+	s := newSetup(t, nil)
+
+	s.fetcher.NewArrivals(context.Background())
+
+	if byID, byPos, files := s.asked(); len(byID)+len(byPos)+len(files) != 0 {
+		t.Error("New Arrivals asked the archive for something with no catalog")
+	}
+}

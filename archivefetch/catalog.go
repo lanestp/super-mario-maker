@@ -104,10 +104,23 @@ func (c *Catalog) Course(dataID uint64) (*Entry, error) {
 // the first skip of them. Event courses, and IDs the server keeps for
 // itself, are left out
 func (c *Catalog) MostPlayed(skip int64, limit int) ([]uint64, error) {
-	rows, err := c.db.Query(`SELECT course_id FROM Course
+	return c.ids(`SELECT course_id FROM Course
 		WHERE is_event_course = 0 AND course_id >= ? AND course_id < ?
 		ORDER BY user_plays DESC, course_id DESC
 		LIMIT ? OFFSET ?`, store.FirstDataID, store.ImportedDataIDLimit, limit, skip)
+}
+
+// Newest lists up to limit course IDs, the most recently uploaded first.
+// Event courses, and IDs the server keeps for itself, are left out
+func (c *Catalog) Newest(limit int) ([]uint64, error) {
+	return c.ids(`SELECT course_id FROM Course
+		WHERE is_event_course = 0 AND course_id >= ? AND course_id < ?
+		ORDER BY upload_time DESC, course_id DESC
+		LIMIT ?`, store.FirstDataID, store.ImportedDataIDLimit, limit)
+}
+
+func (c *Catalog) ids(query string, args ...any) ([]uint64, error) {
+	rows, err := c.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

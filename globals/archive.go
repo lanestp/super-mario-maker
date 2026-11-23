@@ -14,6 +14,27 @@ import (
 // fetching from the archive is turned off
 var FetchFromArchive func(ctx context.Context, dataID uint64) bool
 
+// ArchiveNewArrivals brings in the archive's newest courses, waiting until
+// ctx ends at the most. nil when there is no archive catalog
+var ArchiveNewArrivals func(ctx context.Context)
+
+// * How long New Arrivals waits for the archive's newest courses before
+// * answering with what is here. The rest keep coming in after
+const newArrivalsWait = 5 * time.Second
+
+// NewArrivalsFromArchive brings in the archive's newest courses before New
+// Arrivals is listed, when there is an archive catalog
+func NewArrivalsFromArchive() {
+	if ArchiveNewArrivals == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), newArrivalsWait)
+	defer cancel()
+
+	ArchiveNewArrivals(ctx)
+}
+
 // ArchiveFill brings in courses from the whole archive in the background,
 // until ctx ends. nil when it is turned off
 var ArchiveFill func(ctx context.Context)

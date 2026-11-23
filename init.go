@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -508,8 +509,14 @@ func configureArchiveFetch() error {
 		fillGap = parsed
 	}
 
+	catalog, err := archiveCatalogFromEnv()
+	if err != nil {
+		return err
+	}
+
 	fetcher, err := archivefetch.New(archivefetch.Config{
 		Seeder:    newSeeder(),
+		Catalog:   catalog,
 		FillLimit: fillLimit,
 		FillGap:   fillGap,
 		UrgentGap: time.Second,
@@ -528,4 +535,33 @@ func configureArchiveFetch() error {
 	globals.Logger.Infof("Courses players ask for that are not here are fetched from the archive. The background fill brings in up to %d more", fillLimit)
 
 	return nil
+}
+
+// * The archive's course database (smm_data.db from
+// * https://archive.org/details/mario_maker_database), when there is one:
+// * at PN_SMM_ARCHIVE_DB, or else at archive/smm_data.db next to the
+// * server's own SQLite database. nil when there is none
+func archiveCatalogFromEnv() (*archivefetch.Catalog, error) {
+	path := strings.TrimSpace(os.Getenv("PN_SMM_ARCHIVE_DB"))
+	if path == "" {
+		database := strings.TrimSpace(os.Getenv("PN_SMM_SQLITE_PATH"))
+		if database == "" {
+			return nil, nil
+		}
+
+		path = filepath.Join(filepath.Dir(database), "archive", "smm_data.db")
+
+		if _, err := os.Stat(path); err != nil {
+			return nil, nil
+		}
+	}
+
+	catalog, err := archivefetch.OpenCatalog(path)
+	if err != nil {
+		return nil, fmt.Errorf("PN_SMM_ARCHIVE_DB: %w", err)
+	}
+
+	globals.Logger.Infof("Courses are described from the archive's course database at %s, and the fill brings them in most played first", path)
+
+	return catalog, nil
 }

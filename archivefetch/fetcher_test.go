@@ -37,6 +37,8 @@ type archive struct {
 	hold chan struct{}
 	// * Answered instead of the course, when set
 	status int
+	// * Every request, whatever it was answered
+	requests int
 }
 
 func (a *archive) entry(id uint64) map[string]any {
@@ -55,6 +57,7 @@ func (a *archive) entry(id uint64) map[string]any {
 
 func (a *archive) serve(w http.ResponseWriter, r *http.Request) {
 	a.mutex.Lock()
+	a.requests++
 	hold, status := a.hold, a.status
 	a.mutex.Unlock()
 

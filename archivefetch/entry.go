@@ -23,6 +23,7 @@ type Entry struct {
 	UploadTime      string `json:"uploadTime"`
 	RecordMS        int    `json:"world_record_ms"`
 	RecordHolder    string `json:"world_record_holder_nnid"`
+	RecordHolderPID uint32 `json:"world_record_best_time_player_pid"`
 	RecordHolderMii string `json:"world_record_best_time_player_mii_data"`
 	CreatorMii      string `json:"creator_mii_data"`
 	Stars           int    `json:"stars"`
@@ -50,7 +51,7 @@ func (e Entry) Archived(file []byte) (seed.ArchivedCourse, error) {
 	if e.RecordMS > 0 && e.RecordHolder != "" {
 		course.Record = &seed.ArchivedRecord{
 			Milliseconds: e.RecordMS,
-			Holder:       seed.ArchivedPlayer{Name: e.RecordHolder, MakerMetaBinary: decodeMii(e.RecordHolderMii)},
+			Holder:       seed.ArchivedPlayer{PID: e.RecordHolderPID, Name: e.RecordHolder, MakerMetaBinary: decodeMii(e.RecordHolderMii)},
 		}
 	}
 

@@ -41,6 +41,8 @@ const (
 	// * How many courses the background fill has brought in is kept
 	// * under this name, with the import runs' positions
 	fillCounter = "archive-fill-count"
+	// * How far down the catalog's most played courses the fill has got
+	fillRank = "archive-fill-rank"
 
 	// * How long a fetch a player started may take, once nobody is
 	// * waiting on it any more
@@ -59,6 +61,10 @@ var missFor = map[string]time.Duration{
 // Config is what a Fetcher needs
 type Config struct {
 	Seeder *seed.Seeder
+	// Catalog, when given, is where everything about a course comes
+	// from, and the fill goes through its courses most played first. The
+	// archive's index is then only asked where a course's file is
+	Catalog *Catalog
 	// FillLimit is how many courses the background fill brings in before
 	// it stops. 0 turns it off
 	FillLimit int64
@@ -219,7 +225,7 @@ func (f *Fetcher) run(dataID uint64, current *fetch) {
 
 // * Answers no outcome when the course is here
 func (f *Fetcher) bringIn(ctx context.Context, dataID uint64) (string, string) {
-	entry, err := f.client.byID(ctx, dataID, true)
+	entry, err := f.entry(ctx, dataID, true)
 	if err != nil {
 		return store.ImportFailed, err.Error()
 	}
@@ -231,6 +237,35 @@ func (f *Fetcher) bringIn(ctx context.Context, dataID uint64) (string, string) {
 	}
 
 	return f.bringInEntry(ctx, *entry, true)
+}
+
+// * What is known about a course, with the address of its file: all of
+// * it from the index, or, with a catalog, everything but the address
+// * from the catalog. nil when neither has the course
+func (f *Fetcher) entry(ctx context.Context, dataID uint64, urgent bool) (*Entry, error) {
+	if f.config.Catalog == nil {
+		return f.client.byID(ctx, dataID, urgent)
+	}
+
+	entry, err := f.config.Catalog.Course(dataID)
+	if err != nil || entry == nil {
+		return nil, err
+	}
+
+	indexed, err := f.client.byID(ctx, dataID, urgent)
+	if err != nil {
+		return nil, err
+	}
+
+	if indexed == nil {
+		// * The index has no address for its file, which tryEntry turns
+		// * into a refusal
+		return entry, nil
+	}
+
+	entry.URL = indexed.URL
+
+	return entry, nil
 }
 
 // * Answers no outcome when the course is here. A course that could not
@@ -306,6 +341,11 @@ func (f *Fetcher) Fill(ctx context.Context) {
 		return
 	}
 
+	if f.config.Catalog != nil {
+		f.fillFromCatalog(ctx)
+		return
+	}
+
 	kept := f.config.Seeder.Store
 
 	for ctx.Err() == nil {
@@ -349,6 +389,114 @@ func (f *Fetcher) Fill(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// * How many courses are read from the catalog at once. Each read sorts
+// * the whole catalog, which takes a few seconds
+const catalogBatch = 200
+
+// * Goes through the catalog's courses most played first, so the courses
+// * players liked most are brought in first. How far it has got is kept,
+// * so it carries on from there after a restart
+func (f *Fetcher) fillFromCatalog(ctx context.Context) {
+	kept := f.config.Seeder.Store
+
+	for ctx.Err() == nil {
+		count, countErr := kept.ImportCursor(fillCounter)
+		rank, rankErr := kept.ImportCursor(fillRank)
+
+		if countErr != nil || rankErr != nil {
+			f.config.Log(fmt.Sprintf("The archive fill's place could not be read: %v", errors.Join(countErr, rankErr)))
+			f.pause(ctx)
+
+			continue
+		}
+
+		if count >= f.config.FillLimit {
+			f.config.Log(fmt.Sprintf("The archive fill has brought in %d courses, its limit. It stops here", count))
+			return
+		}
+
+		ids, err := f.config.Catalog.MostPlayed(rank, catalogBatch)
+		if err != nil {
+			f.config.Log(fmt.Sprintf("The catalog could not be read: %v", err))
+			f.pause(ctx)
+
+			continue
+		}
+
+		if len(ids) == 0 {
+			f.config.Log("The archive fill has been through every course in the catalog. It stops here")
+			return
+		}
+
+		for i := 0; i < len(ids); i++ {
+			id := ids[i]
+
+			if ctx.Err() != nil {
+				return
+			}
+
+			brought := false
+
+			// * A failure that may go right another time, such as the
+			// * archive being down, is tried again before moving on. The
+			// * gate spaces the tries out further each time
+			for try := 0; try < maxFillTries && ctx.Err() == nil && !f.here(id); try++ {
+				var again bool
+				if brought, again = f.fillOne(ctx, id); !again {
+					break
+				}
+			}
+
+			if ctx.Err() != nil {
+				return
+			}
+
+			if brought {
+				count++
+
+				if err := kept.SetImportCursor(fillCounter, count); err != nil {
+					f.config.Log(fmt.Sprintf("The archive fill's count could not be kept: %v", err))
+				}
+
+				if count%100 == 0 {
+					f.config.Log(fmt.Sprintf("The archive fill has brought in %d courses, and is %d courses down the most played", count, rank))
+				}
+
+				if count >= f.config.FillLimit {
+					break
+				}
+			}
+
+			rank++
+
+			if err := kept.SetImportCursor(fillRank, rank); err != nil {
+				f.config.Log(fmt.Sprintf("The archive fill's place could not be kept: %v", err))
+			}
+		}
+	}
+}
+
+// * How many times the fill tries a course that failed in a way that may
+// * go right another time
+const maxFillTries = 5
+
+// * Brings in one course for the fill. Says whether it is here now, and
+// * whether it is worth trying again
+func (f *Fetcher) fillOne(ctx context.Context, dataID uint64) (brought, again bool) {
+	entry, err := f.entry(ctx, dataID, false)
+	if err != nil {
+		return false, true
+	}
+
+	if entry == nil {
+		return false, false
+	}
+
+	outcome, _ := f.bringInEntry(ctx, *entry, false)
+
+	return outcome == "", outcome == store.ImportFailed
 }
 
 func (f *Fetcher) pause(ctx context.Context) {

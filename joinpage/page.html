@@ -6,150 +6,311 @@
 <title>Join the Mario Maker server</title>
 <style>
 :root {
-	--bg: #f6f4ef;
-	--card: #ffffff;
-	--ink: #1d1b18;
-	--muted: #5f5a52;
-	--line: #e2ddd3;
-	--accent: #c8341c;
-	--accent-ink: #ffffff;
-	--field: #fbfaf7;
-	--error-bg: #fdecea;
+	--sky: #6aa8ff;
+	--grid: rgba(255, 255, 255, 0.28);
+	--grid-major: rgba(255, 255, 255, 0.5);
+	--card: #fffdf6;
+	--ink: #1b1a2e;
+	--muted: #514f66;
+	--outline: #1b1a2e;
+	--cemu: #ff8a1f;
+	--wiiu: #2fb34a;
+	--button: #ffd21f;
+	--button-ink: #1b1a2e;
+	--field: #ffffff;
+	--coin: #ffd21f;
+	--grass: #4cc63f;
+	--grass-dark: #2e8f2a;
+	--dirt: #c7783c;
+	--dirt-dark: #9c5626;
+	--cloud: #ffffff;
+	--error-bg: #ffe1dc;
 	--error-ink: #8a1c0f;
+	--title-fill: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
 	:root {
-		--bg: #171614;
-		--card: #211f1c;
-		--ink: #f1ede6;
-		--muted: #b3aca1;
-		--line: #36322d;
-		--accent: #ef5a3c;
-		--accent-ink: #1a0e0b;
-		--field: #1a1917;
-		--error-bg: #3a1a14;
-		--error-ink: #ffb4a6;
+		--sky: #1b2350;
+		--grid: rgba(255, 255, 255, 0.07);
+		--grid-major: rgba(255, 255, 255, 0.14);
+		--card: #24223a;
+		--ink: #f3f1ff;
+		--muted: #bdb9d6;
+		--outline: #0c0b18;
+		--button-ink: #1b1a2e;
+		--field: #1b1a2e;
+		--grass: #2f8f2a;
+		--grass-dark: #1f611c;
+		--dirt: #8a4f25;
+		--dirt-dark: #6a3a18;
+		--cloud: #3a3f70;
+		--error-bg: #4a1d18;
+		--error-ink: #ffc2b8;
+		--title-fill: #ffe36b;
 	}
 }
 * { box-sizing: border-box; }
+html { background: var(--dirt); }
 body {
 	margin: 0;
-	background: var(--bg);
+	min-height: 100vh;
 	color: var(--ink);
 	font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-main { max-width: 980px; margin: 0 auto; padding: 40px 16px 64px; }
-header { margin-bottom: 32px; }
-h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
-.lede { color: var(--muted); margin: 0; max-width: 60ch; }
-.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-section {
-	background: var(--card);
-	border: 1px solid var(--line);
-	border-radius: 14px;
-	padding: 24px;
+	/* * The course editor's graph paper: small squares, with a darker line
+	   every fourth */
+	background-color: var(--sky);
+	background-image:
+		linear-gradient(var(--grid-major) 2px, transparent 2px),
+		linear-gradient(90deg, var(--grid-major) 2px, transparent 2px),
+		linear-gradient(var(--grid) 1px, transparent 1px),
+		linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+	background-size: 128px 128px, 128px 128px, 32px 32px, 32px 32px;
 	display: flex;
 	flex-direction: column;
+	overflow-x: hidden;
 }
-h2 { font-size: 1.25rem; margin: 0 0 4px; }
-.for { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
-label { display: block; font-weight: 600; font-size: 0.9rem; margin: 14px 0 6px; }
+main { position: relative; width: 100%; max-width: 1000px; margin: 0 auto; padding: 48px 16px 40px; flex: 1; }
+
+/* * Clouds, drawn from circles */
+.cloud {
+	position: absolute;
+	width: 120px;
+	height: 40px;
+	background: var(--cloud);
+	border-radius: 40px;
+	opacity: 0.9;
+	pointer-events: none;
+}
+.cloud::before, .cloud::after {
+	content: "";
+	position: absolute;
+	background: var(--cloud);
+	border-radius: 50%;
+}
+.cloud::before { width: 56px; height: 56px; left: 16px; top: -28px; }
+.cloud::after { width: 44px; height: 44px; left: 56px; top: -18px; }
+.cloud.one { top: 28px; right: 6%; }
+.cloud.two { top: 150px; left: -30px; transform: scale(0.7); }
+.cloud.three { top: 64px; left: 46%; transform: scale(0.55); opacity: 0.7; }
+
+header { position: relative; margin-bottom: 36px; text-align: center; }
+h1 {
+	font-size: clamp(2rem, 6vw, 3.4rem);
+	line-height: 1.05;
+	margin: 0 0 14px;
+	font-weight: 900;
+	letter-spacing: 0.01em;
+	color: var(--title-fill);
+	/* * A thick outline, then a drop, like a title card */
+	text-shadow:
+		-3px -3px 0 var(--outline), 3px -3px 0 var(--outline), -3px 3px 0 var(--outline), 3px 3px 0 var(--outline),
+		0 -3px 0 var(--outline), 0 3px 0 var(--outline), -3px 0 0 var(--outline), 3px 0 0 var(--outline),
+		6px 7px 0 var(--outline);
+}
+.lede {
+	display: inline-block;
+	margin: 0;
+	max-width: 52ch;
+	background: var(--card);
+	border: 3px solid var(--outline);
+	border-radius: 16px;
+	padding: 10px 20px;
+	font-weight: 600;
+	box-shadow: 4px 4px 0 var(--outline);
+}
+
+.choices { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; }
+section {
+	background: var(--card);
+	border: 4px solid var(--outline);
+	border-radius: 18px;
+	box-shadow: 8px 8px 0 var(--outline);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	transform: rotate(-0.6deg);
+}
+section + section { transform: rotate(0.6deg); }
+.strip {
+	background: var(--cemu);
+	border-bottom: 4px solid var(--outline);
+	padding: 14px 24px 12px;
+}
+.wiiu .strip { background: var(--wiiu); }
+h2 {
+	font-size: 1.6rem;
+	margin: 0;
+	font-weight: 900;
+	color: #ffffff;
+	text-shadow: -2px -2px 0 var(--outline), 2px -2px 0 var(--outline), -2px 2px 0 var(--outline), 2px 2px 0 var(--outline), 3px 4px 0 var(--outline);
+}
+.body { padding: 20px 24px 24px; display: flex; flex-direction: column; flex: 1; }
+.for { color: var(--muted); margin: 0 0 8px; font-size: 0.95rem; }
+label { display: block; font-weight: 800; font-size: 0.95rem; margin: 16px 0 6px; }
 .hint { display: block; font-weight: 400; color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
 input {
 	width: 100%;
 	font: inherit;
-	padding: 10px 12px;
-	border: 1px solid var(--line);
-	border-radius: 8px;
+	font-weight: 600;
+	padding: 11px 14px;
+	border: 3px solid var(--outline);
+	border-radius: 12px;
 	background: var(--field);
 	color: var(--ink);
 }
-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+input:focus { outline: 4px solid var(--button); outline-offset: 0; }
 button {
-	margin-top: 20px;
+	margin-top: 22px;
 	width: 100%;
 	font: inherit;
-	font-weight: 600;
-	padding: 12px;
-	border: 0;
-	border-radius: 8px;
-	background: var(--accent);
-	color: var(--accent-ink);
+	font-size: 1.1rem;
+	font-weight: 900;
+	padding: 14px;
+	border: 3px solid var(--outline);
+	border-radius: 14px;
+	background: var(--button);
+	color: var(--button-ink);
 	cursor: pointer;
+	box-shadow: 0 6px 0 var(--outline);
+	transition: transform 60ms, box-shadow 60ms;
 }
-button:hover { filter: brightness(1.05); }
+button:hover { filter: brightness(1.06); }
+button:active { transform: translateY(5px); box-shadow: 0 1px 0 var(--outline); }
+button:focus-visible { outline: 4px solid var(--card); outline-offset: 2px; }
 .error {
 	background: var(--error-bg);
 	color: var(--error-ink);
-	border-radius: 8px;
-	padding: 10px 12px;
-	margin: 0 0 4px;
+	border: 3px solid var(--outline);
+	border-radius: 12px;
+	padding: 10px 14px;
+	margin: 8px 0 4px;
+	font-weight: 700;
 	font-size: 0.95rem;
 }
-ol { padding-left: 20px; margin: 20px 0 0; color: var(--muted); font-size: 0.95rem; }
-ol li { margin-bottom: 6px; }
-.after { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
-.notes { margin-top: 32px; color: var(--muted); font-size: 0.9rem; max-width: 70ch; }
-.notes h3 { color: var(--ink); font-size: 1rem; margin: 0 0 8px; }
+
+/* * The steps after downloading, numbered in coins */
+ol { list-style: none; counter-reset: step; padding: 0; margin: 22px 0 0; color: var(--muted); font-size: 0.95rem; }
+ol li { counter-increment: step; position: relative; padding-left: 42px; margin-bottom: 12px; min-height: 30px; }
+ol li::before {
+	content: counter(step);
+	position: absolute;
+	left: 0;
+	top: -2px;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: var(--coin);
+	border: 3px solid var(--outline);
+	color: var(--button-ink);
+	font-weight: 900;
+	font-size: 0.9rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.18);
+}
+.after { margin-top: 22px; padding-top: 4px; border-top: 3px dashed var(--outline); }
+
+.notes {
+	position: relative;
+	margin: 40px auto 0;
+	max-width: 70ch;
+	background: var(--card);
+	border: 3px solid var(--outline);
+	border-radius: 16px;
+	box-shadow: 6px 6px 0 var(--outline);
+	padding: 18px 22px;
+	color: var(--muted);
+	font-size: 0.92rem;
+}
+.notes h3 { color: var(--ink); font-size: 1.05rem; font-weight: 900; margin: 0 0 8px; }
 .notes p { margin: 0 0 8px; }
-code { font-size: 0.9em; background: var(--field); border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; }
+.notes p:last-child { margin-bottom: 0; }
+code { font-size: 0.9em; background: var(--field); border: 2px solid var(--outline); border-radius: 6px; padding: 0 5px; }
+
+/* * The ground the page stands on: grass over dirt */
+.ground {
+	height: 72px;
+	border-top: 4px solid var(--outline);
+	background:
+		linear-gradient(var(--grass) 0 18px, var(--grass-dark) 18px 22px, transparent 22px),
+		repeating-linear-gradient(90deg, transparent 0 46px, var(--dirt-dark) 46px 48px),
+		repeating-linear-gradient(var(--dirt) 0 22px, var(--dirt-dark) 22px 24px);
+	background-color: var(--dirt);
+}
+
+@media (max-width: 640px) {
+	section, section + section { transform: none; }
+	.cloud.three { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+	button { transition: none; }
+}
 </style>
 </head>
 <body>
 <main>
+	<div class="cloud one" aria-hidden="true"></div>
+	<div class="cloud two" aria-hidden="true"></div>
+	<div class="cloud three" aria-hidden="true"></div>
+
 	<header>
 		<h1>Join the Mario Maker server</h1>
 		<p class="lede">Pick how you play. You get a username here and a zip with everything to set up.{{if .NeedsInvite}} You need an invite code from whoever runs the server.{{end}}</p>
 	</header>
 
 	<div class="choices">
-		<section>
-			<h2>Cemu</h2>
-			<p class="for">On a computer, with the Cemu emulator and your own copy of the game.</p>
-			{{if eq .ErrorFor "cemu"}}<p class="error" role="alert">{{.Error}}</p>{{end}}
-			<form method="post" action="/join/cemu">
-				{{if .NeedsInvite}}<label for="cemu-invite">Invite code</label>
-				<input id="cemu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "cemu"}}value="{{.Invite}}"{{end}}>{{end}}
-				<label for="cemu-username">Username
-					<span class="hint">6 to 16 letters, numbers, dots, dashes and underscores. Shown to other players.</span>
-				</label>
-				<input id="cemu-username" name="username" required minlength="6" maxlength="16" pattern="[A-Za-z0-9._\-]{6,16}" autocomplete="off" {{if eq .ErrorFor "cemu"}}value="{{.Username}}"{{end}}>
-				<button type="submit">Make my account and download</button>
-			</form>
-			<div class="after">
-				<ol>
-					<li>Start Cemu once, then close it.</li>
-					<li>In Cemu, <em>File &gt; Open Cemu folder</em>, and copy everything from the zip into it, merging folders.</li>
-					<li>In <em>Options &gt; General settings &gt; Account</em>, pick your username and set the network service to <em>Custom</em>.</li>
-					<li>Start the game and go into Course World.</li>
-				</ol>
+		<section class="cemu">
+			<div class="strip"><h2>Cemu</h2></div>
+			<div class="body">
+				<p class="for">On a computer, with the Cemu emulator and your own copy of the game.</p>
+				{{if eq .ErrorFor "cemu"}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+				<form method="post" action="/join/cemu">
+					{{if .NeedsInvite}}<label for="cemu-invite">Invite code</label>
+					<input id="cemu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "cemu"}}value="{{.Invite}}"{{end}}>{{end}}
+					<label for="cemu-username">Username
+						<span class="hint">6 to 16 letters, numbers, dots, dashes and underscores. Shown to other players.</span>
+					</label>
+					<input id="cemu-username" name="username" required minlength="6" maxlength="16" pattern="[A-Za-z0-9._\-]{6,16}" autocomplete="off" {{if eq .ErrorFor "cemu"}}value="{{.Username}}"{{end}}>
+					<button type="submit">Make my account and download</button>
+				</form>
+				<div class="after">
+					<ol>
+						<li>Start Cemu once, then close it.</li>
+						<li>In Cemu, <em>File &gt; Open Cemu folder</em>, and copy everything from the zip into it, merging folders.</li>
+						<li>In <em>Options &gt; General settings &gt; Account</em>, pick your username, tick <em>Enable online mode</em>, and set the network service to <em>Custom</em>.</li>
+						<li>Start the game and go into Course World.</li>
+					</ol>
+				</div>
 			</div>
 		</section>
 
 		{{if .WiiU}}
-		<section>
-			<h2>Wii U</h2>
-			<p class="for">On a Wii U running Aroma that already plays on Pretendo. Only Super Mario Maker comes here; everything else stays on Pretendo.</p>
-			{{if eq .ErrorFor "wiiu"}}<p class="error" role="alert">{{.Error}}</p>{{end}}
-			<form method="post" action="/join/wiiu">
-				{{if .NeedsInvite}}<label for="wiiu-invite">Invite code</label>
-				<input id="wiiu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.Invite}}"{{end}}>{{end}}
-				<label for="wiiu-username">Username
-					<span class="hint">6 to 16 letters, numbers, dots, dashes and underscores.</span>
-				</label>
-				<input id="wiiu-username" name="username" required minlength="6" maxlength="16" pattern="[A-Za-z0-9._\-]{6,16}" autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.Username}}"{{end}}>
-				<label for="wiiu-pid">Pretendo player ID
-					<span class="hint">The number that identifies your Pretendo account, called its PID. Not your username.</span>
-				</label>
-				<input id="wiiu-pid" name="pid" required inputmode="numeric" pattern="[0-9]{1,10}" autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.PID}}"{{end}}>
-				<button type="submit">Make my account and download</button>
-			</form>
-			<div class="after">
-				<ol>
-					<li>Copy the <code>wiiu</code> folder from the zip onto the root of your SD card.</li>
-					<li>Start the console, sign in to that Pretendo account, and start Super Mario Maker.</li>
-					<li>To leave, delete <code>smm-private-server.wps</code> from the SD card.</li>
-				</ol>
+		<section class="wiiu">
+			<div class="strip"><h2>Wii U</h2></div>
+			<div class="body">
+				<p class="for">On a Wii U running Aroma that already plays on Pretendo. Only Super Mario Maker comes here; everything else stays on Pretendo.</p>
+				{{if eq .ErrorFor "wiiu"}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+				<form method="post" action="/join/wiiu">
+					{{if .NeedsInvite}}<label for="wiiu-invite">Invite code</label>
+					<input id="wiiu-invite" name="invite" required autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.Invite}}"{{end}}>{{end}}
+					<label for="wiiu-username">Username
+						<span class="hint">6 to 16 letters, numbers, dots, dashes and underscores.</span>
+					</label>
+					<input id="wiiu-username" name="username" required minlength="6" maxlength="16" pattern="[A-Za-z0-9._\-]{6,16}" autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.Username}}"{{end}}>
+					<label for="wiiu-pid">Pretendo player ID
+						<span class="hint">The number that identifies your Pretendo account, called its PID. Not your username.</span>
+					</label>
+					<input id="wiiu-pid" name="pid" required inputmode="numeric" pattern="[0-9]{1,10}" autocomplete="off" {{if eq .ErrorFor "wiiu"}}value="{{.PID}}"{{end}}>
+					<button type="submit">Make my account and download</button>
+				</form>
+				<div class="after">
+					<ol>
+						<li>Copy the <code>wiiu</code> folder from the zip onto the root of your SD card.</li>
+						<li>Start the console, sign in to that Pretendo account, and start Super Mario Maker.</li>
+						<li>To leave, delete <code>smm-private-server.wps</code> from the SD card.</li>
+					</ol>
+				</div>
 			</div>
 		</section>
 		{{end}}
@@ -159,9 +320,9 @@ code { font-size: 0.9em; background: var(--field); border: 1px solid var(--line)
 		<h3>Good to know</h3>
 		<p>Your zip lets whoever has it play as you. Keep it to yourself.</p>
 		<p>In Cemu, makers show without a face: Cemu can't draw Mii faces without files from a real Wii U.</p>
-		<p>Uploading a course ends with error 115-1101. The course is uploaded anyway; the error is the game failing to post to Miiverse, which doesn't exist here.</p>
 		{{if .WiiU}}<p>Playing on a real Wii U is new and hasn't been tried on a console yet.</p>{{end}}
 	</div>
 </main>
+<div class="ground" aria-hidden="true"></div>
 </body>
 </html>

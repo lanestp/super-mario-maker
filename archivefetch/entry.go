@@ -27,6 +27,10 @@ type Entry struct {
 	RecordHolderMii string `json:"world_record_best_time_player_mii_data"`
 	CreatorMii      string `json:"creator_mii_data"`
 	Stars           int    `json:"stars"`
+	// Captured is when the Wayback Machine captured the file at URL, as
+	// its index gives it. Empty when not known, and the capture nearest
+	// to the archive's crawl is asked for
+	Captured string `json:"captured,omitempty"`
 }
 
 // Archived is the course as the seeder takes it, with its file

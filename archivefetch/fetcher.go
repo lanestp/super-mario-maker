@@ -33,6 +33,10 @@ const (
 	// WaybackURL asks for a file as it was. "id_" leaves it unwrapped,
 	// and the short timestamp is sent on to the copy nearest to it
 	WaybackURL = "https://web.archive.org/web/2id_/"
+	// CDXURL is the Wayback Machine's index of what it has captured
+	CDXURL = "https://web.archive.org/cdx/search/cdx"
+	// ReplayURL is where a capture is asked for by when it was made
+	ReplayURL = "https://web.archive.org/web/"
 
 	// * The first and last positions in the index that hold a course
 	firstPosition = 7_515_625
@@ -78,6 +82,8 @@ type Config struct {
 	HTTP       *http.Client
 	Index      string
 	Wayback    string
+	CDX        string
+	Replay     string
 	Positions  [2]int64
 	FillPause  time.Duration
 	RandomInt  func(n int64) int64
@@ -124,6 +130,14 @@ func New(config Config) (*Fetcher, error) {
 		config.Wayback = WaybackURL
 	}
 
+	if config.CDX == "" {
+		config.CDX = CDXURL
+	}
+
+	if config.Replay == "" {
+		config.Replay = ReplayURL
+	}
+
 	if config.Positions == [2]int64{} {
 		config.Positions = [2]int64{firstPosition, lastPosition}
 	}
@@ -146,6 +160,8 @@ func New(config Config) (*Fetcher, error) {
 			http:    config.HTTP,
 			index:   config.Index,
 			wayback: config.Wayback,
+			cdx:     config.CDX,
+			replay:  config.Replay,
 			gate:    &gate{fillGap: config.FillGap, urgentGap: config.UrgentGap},
 		},
 		inFlight: map[uint64]*fetch{},
@@ -239,9 +255,10 @@ func (f *Fetcher) bringIn(ctx context.Context, dataID uint64) (string, string) {
 	return f.bringInEntry(ctx, *entry, true)
 }
 
-// * What is known about a course, with the address of its file: all of
-// * it from the index, or, with a catalog, everything but the address
-// * from the catalog. nil when neither has the course
+// * What is known about a course, with the address of its file. With a
+// * catalog, everything comes from it, and the address from the Wayback
+// * Machine's own index; without one, all of it from the archive's
+// * community index. nil when the course is not known
 func (f *Fetcher) entry(ctx context.Context, dataID uint64, urgent bool) (*Entry, error) {
 	if f.config.Catalog == nil {
 		return f.client.byID(ctx, dataID, urgent)
@@ -252,18 +269,18 @@ func (f *Fetcher) entry(ctx context.Context, dataID uint64, urgent bool) (*Entry
 		return nil, err
 	}
 
-	indexed, err := f.client.byID(ctx, dataID, urgent)
+	original, captured, err := f.client.capture(ctx, dataID, urgent)
 	if err != nil {
 		return nil, err
 	}
 
-	if indexed == nil {
-		// * The index has no address for its file, which tryEntry turns
-		// * into a refusal
+	if original == "" {
+		// * tryEntry keeps a course with no captured file as not archived
 		return entry, nil
 	}
 
-	entry.URL = indexed.URL
+	entry.URL = original
+	entry.Captured = captured
 
 	return entry, nil
 }
@@ -291,6 +308,10 @@ func (f *Fetcher) bringInEntry(ctx context.Context, entry Entry, urgent bool) (s
 
 func (f *Fetcher) tryEntry(ctx context.Context, entry Entry, urgent bool) (string, string) {
 	if entry.URL == "" {
+		if f.config.Catalog != nil {
+			return store.ImportNotArchived, "the Wayback Machine has no capture of its file"
+		}
+
 		return store.ImportRefused, "the index has no address for its file"
 	}
 
@@ -298,7 +319,7 @@ func (f *Fetcher) tryEntry(ctx context.Context, entry Entry, urgent bool) (strin
 		return store.ImportRefused, "the index entry can not be used: " + err.Error()
 	}
 
-	file, err := f.client.file(ctx, entry.URL, urgent)
+	file, err := f.client.file(ctx, entry.URL, entry.Captured, urgent)
 	if err != nil {
 		return store.ImportFailed, err.Error()
 	}

@@ -149,11 +149,11 @@ func TestWithACatalogAnIDItDoesNotHaveIsNotLookedUp(t *testing.T) {
 		t.Fatal("a course not in the catalog was brought in")
 	}
 
-	if byID, _, files := s.asked(); len(byID) != 0 || len(files) != 0 {
-		t.Errorf("asked the index for %v and the Wayback Machine for %v, want nothing", byID, files)
+	if byID, _, files := s.asked(); len(byID) != 0 || len(files) != 0 || len(s.archive.cdx) != 0 {
+		t.Errorf("asked the index for %v, the Wayback Machine's index for %v and for files %v, want nothing", byID, s.archive.cdx, files)
 	}
 
-	// * In the catalog, but the index has no address for its file
+	// * In the catalog, but the Wayback Machine has no capture of its file
 	if s.fetcher.Fetch(context.Background(), 2000050) {
 		t.Fatal("a course with no address for its file was brought in")
 	}
@@ -265,4 +265,39 @@ func ratingOf(t *testing.T, s store.Store, dataID uint64, slot int8) int64 {
 	}
 
 	return 0
+}
+
+func TestWithACatalogTheFileIsFoundThroughTheWaybackMachinesOwnIndex(t *testing.T) {
+	catalog := newCatalog(t)
+	s := newSetup(t, func(config *Config) { config.Catalog = catalog })
+
+	if !s.fetcher.Fetch(context.Background(), firstCourse+4) {
+		t.Fatal("the course was not brought in")
+	}
+
+	byID, _, files := s.asked()
+
+	// * The community index is never asked
+	if len(byID) != 0 {
+		t.Errorf("asked the community index for %v, want nothing", byID)
+	}
+
+	if fmt.Sprint(s.archive.cdx) != fmt.Sprint([]uint64{firstCourse + 4}) || fmt.Sprint(files) != fmt.Sprint([]uint64{firstCourse + 4}) {
+		t.Errorf("asked the Wayback Machine's index for %v and for files %v, want the course once each", s.archive.cdx, files)
+	}
+
+	// * The latest version, by when it was captured
+	if fmt.Sprint(s.archive.captures) != "[20210605075810id_]" {
+		t.Errorf("asked for the captures %v, want the latest one", s.archive.captures)
+	}
+
+	// * A course with no capture is kept as not archived, for -retry
+	if s.fetcher.Fetch(context.Background(), firstCourse+3) {
+		t.Fatal("a course with no captured file was brought in")
+	}
+
+	attempts, _ := s.store.ImportAttemptsToRetry([]string{store.ImportNotArchived}, 5, 10)
+	if len(attempts) != 1 || attempts[0].DataID != firstCourse+3 {
+		t.Errorf("kept %+v, want the course with no capture as not archived", attempts)
+	}
 }

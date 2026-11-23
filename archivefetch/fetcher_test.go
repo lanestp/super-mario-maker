@@ -33,6 +33,9 @@ type archive struct {
 	byID     []uint64
 	byPos    []int64
 	files    []uint64
+	cdx      []uint64
+	// * The capture times files were asked for by
+	captures []string
 	// * Held until closed, when set, to keep a lookup waiting
 	hold chan struct{}
 	// * Answered instead of the course, when set
@@ -97,6 +100,33 @@ func (a *archive) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		json.NewEncoder(w).Encode([]map[string]any{a.entry(firstCourse + number - 100)})
+	case r.URL.Path == "/cdx":
+		// * Asked by the course ID padded to 11 digits
+		pattern := r.URL.Query().Get("url")
+		id, _ := strconv.ParseUint(strings.TrimSuffix(strings.TrimPrefix(pattern, courseFiles), "-*"), 10, 64)
+		a.cdx = append(a.cdx, id)
+
+		if !strings.HasPrefix(pattern, courseFiles) || r.URL.Query().Get("filter") != "statuscode:200" || !a.archived[id] {
+			w.Write([]byte("[]"))
+			return
+		}
+
+		// * Two versions: the latest is the one wanted
+		json.NewEncoder(w).Encode([][]string{
+			{"original", "timestamp"},
+			{fmt.Sprintf("https://cdn.example.com/data/%d?Signature=old", id), "20210101000000"},
+			{fmt.Sprintf("https://cdn.example.com/data/%d", id), "20210605075810"},
+		})
+	case strings.HasPrefix(r.URL.Path, "/replay/"):
+		a.captures = append(a.captures, strings.SplitN(strings.TrimPrefix(r.URL.Path, "/replay/"), "/", 2)[0])
+		a.files = append(a.files, number)
+
+		if !a.archived[number] {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Write(a.file)
 	case strings.HasPrefix(r.URL.Path, "/wayback/"):
 		a.files = append(a.files, number)
 
@@ -185,6 +215,8 @@ func newSetup(t *testing.T, change func(*Config)) *setup {
 		HTTP:      server.Client(),
 		Index:     server.URL + "/index/",
 		Wayback:   server.URL + "/wayback/",
+		CDX:       server.URL + "/cdx",
+		Replay:    server.URL + "/replay/",
 		Positions: [2]int64{100, 109},
 		FillPause: time.Millisecond,
 		Log: func(line string) {

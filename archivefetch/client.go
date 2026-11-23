@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -85,6 +86,8 @@ type client struct {
 	http    *http.Client
 	index   string
 	wayback string
+	cdx     string
+	replay  string
 	gate    *gate
 }
 
@@ -170,9 +173,54 @@ func (c *client) atPosition(ctx context.Context, position int64) ([]Entry, error
 	return entries, nil
 }
 
-// * The course file, or nil when the Wayback Machine has no copy of it
-func (c *client) file(ctx context.Context, original string, urgent bool) ([]byte, error) {
-	file, err := c.get(ctx, c.wayback+original, urgent)
+// * Where the game's servers kept a course's file: Nintendo's file host,
+// * keyed by the course ID padded to 11 digits and the file's version
+const courseFiles = "d2sno3mhmk1ekx.cloudfront.net/10.WUP_AMAJ_datastore/ds/1/data/"
+
+// * Where the Wayback Machine has a course's file: the address it was
+// * captured at, which carries a signature, and when. Asks the Wayback
+// * Machine's own index by the course ID alone. Empty when it has none
+func (c *client) capture(ctx context.Context, dataID uint64, urgent bool) (original, captured string, err error) {
+	query := url.Values{
+		"url":    {fmt.Sprintf("%s%011d-*", courseFiles, dataID)},
+		"output": {"json"},
+		"fl":     {"original,timestamp"},
+		"filter": {"statuscode:200"},
+	}
+
+	body, err := c.get(ctx, c.cdx+"?"+query.Encode(), urgent)
+	if err != nil || body == nil {
+		return "", "", err
+	}
+
+	// * A header row, then one row per capture, oldest version first. An
+	// * empty answer is no captures
+	var rows [][]string
+	if len(bytes.TrimSpace(body)) > 0 {
+		if err := json.Unmarshal(body, &rows); err != nil {
+			return "", "", fmt.Errorf("the Wayback Machine's index answered something that could not be read: %w", err)
+		}
+	}
+
+	// * The latest version of the file is the course as it last was
+	for i := len(rows) - 1; i >= 1; i-- {
+		if len(rows[i]) == 2 && rows[i][0] != "" && rows[i][1] != "" {
+			return rows[i][0], rows[i][1], nil
+		}
+	}
+
+	return "", "", nil
+}
+
+// * The course file, or nil when the Wayback Machine has no copy of it.
+// * The capture made when given, or else the one nearest the crawl
+func (c *client) file(ctx context.Context, original, captured string, urgent bool) ([]byte, error) {
+	address := c.wayback + original
+	if captured != "" {
+		address = c.replay + captured + "id_/" + original
+	}
+
+	file, err := c.get(ctx, address, urgent)
 	if err != nil {
 		return nil, err
 	}
